@@ -1,11 +1,17 @@
-// Default access configuration. Can be overridden via ACCESS_CONFIG sheet.
+// ============================================================
+//  Config.gs — Biblioteca de Telemedicina
+//  Ajusta los valores marcados con TODO antes de desplegar.
+// ============================================================
 
 var DEFAULT_ACCESS_CONFIG = {
-  adminEmail: '', // set in sheet
+  adminEmails: [],                               // se carga desde la hoja AccessConfig
   allowedDomains: ['@telesalud.gob.sv', '@goes.gob.sv'],
-  allowedEmails: ['rodolfovargasoff@gmail.com', 'ia.rodolfovargas@ufg.edu.sv'],
-  guestEditorEmails: []
+  allowedEmails: [],                             // correos externos de confianza
+  guestEditorEmails: []                          // pueden ver artículos en revisión pero no administrar
 };
+
+// TODO: actualizar esta URL cuando el Google Sites de Telemedicina esté listo
+var BIBLIOTECA_PUBLICA_URL = 'https://sites.google.com/telesalud.gob.sv/bibliotecatelemedicina/inicio';
 
 function getAccessConfig() {
   var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ACCESS_CONFIG);
@@ -13,45 +19,78 @@ function getAccessConfig() {
 
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return DEFAULT_ACCESS_CONFIG;
+
   var header = values[0];
-  var row = values[1];
-  var idx = {};
+  var row    = values[1];
+  var idx    = {};
   for (var i = 0; i < header.length; i++) idx[header[i]] = i;
 
-  var adminEmails = (row[idx['adminEmail']] || '').toString().split(',').map(function(s){return s.trim();}).filter(Boolean);
-  var allowedDomains = (row[idx['allowedDomains']] || '').toString().split(',').map(function(s){return s.trim();}).filter(Boolean);
-  var allowedEmails = (row[idx['allowedEmails']] || '').toString().split(',').map(function(s){return s.trim();}).filter(Boolean);
-  var guestEditorEmails = (row[idx['guestEditorEmails']] || '').toString().split(',').map(function(s){return s.trim();}).filter(Boolean);
+  function splitEmails(raw) {
+    return (raw || '').toString().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  }
+
+  var adminEmails      = splitEmails(row[idx['adminEmail']]);
+  var allowedDomains   = splitEmails(row[idx['allowedDomains']]);
+  var allowedEmails    = splitEmails(row[idx['allowedEmails']]);
+  var guestEditorEmails = splitEmails(row[idx['guestEditorEmails']]);
 
   return {
-    adminEmails: adminEmails.length ? adminEmails : [DEFAULT_ACCESS_CONFIG.adminEmail],
-    allowedDomains: allowedDomains.length ? allowedDomains : DEFAULT_ACCESS_CONFIG.allowedDomains,
-    allowedEmails: allowedEmails.length ? allowedEmails : DEFAULT_ACCESS_CONFIG.allowedEmails,
+    adminEmails:       adminEmails.length      ? adminEmails      : DEFAULT_ACCESS_CONFIG.adminEmails,
+    allowedDomains:    allowedDomains.length   ? allowedDomains   : DEFAULT_ACCESS_CONFIG.allowedDomains,
+    allowedEmails:     allowedEmails.length    ? allowedEmails    : DEFAULT_ACCESS_CONFIG.allowedEmails,
     guestEditorEmails: guestEditorEmails.length ? guestEditorEmails : DEFAULT_ACCESS_CONFIG.guestEditorEmails
   };
 }
 
 function getNotificationsConfig() {
   var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.NOTIFICATIONS_CONFIG);
-  if (!sheet) return { recipients: [], replyTo: '', senderAlias: '' };
+  if (!sheet) return { recipients: [], replyTo: '', senderAlias: 'Biblioteca Telemedicina' };
+
   var values = sheet.getDataRange().getValues();
-  if (values.length < 2) return { recipients: [], replyTo: '', senderAlias: '' };
+  if (values.length < 2) return { recipients: [], replyTo: '', senderAlias: 'Biblioteca Telemedicina' };
+
   var header = values[0];
-  var idx = {};
+  var idx    = {};
   for (var i = 0; i < header.length; i++) idx[header[i]] = i;
-  var recipients = [];
-  var replyTo = '';
-  var senderAlias = '';
+
+  var recipients  = [];
+  var replyTo     = '';
+  var senderAlias = 'Biblioteca Telemedicina';
+
   for (var r = 1; r < values.length; r++) {
-    var row = values[r];
+    var row     = values[r];
     var enabled = (row[idx['enabled']] || '').toString().toUpperCase() === 'Y';
     if (enabled) {
       recipients.push((row[idx['recipientEmail']] || '').toString().trim());
-      if (!replyTo) replyTo = (row[idx['replyTo']] || '').toString().trim();
+      if (!replyTo)     replyTo     = (row[idx['replyTo']]     || '').toString().trim();
       if (!senderAlias) senderAlias = (row[idx['senderAlias']] || '').toString().trim();
     }
   }
-  return { recipients: recipients.filter(Boolean), replyTo: replyTo, senderAlias: senderAlias };
+
+  return {
+    recipients:  recipients.filter(Boolean),
+    replyTo:     replyTo,
+    senderAlias: senderAlias || 'Biblioteca Telemedicina'
+  };
 }
 
-
+/**
+ * Retorna la URL pública base del Web App (guardada en SiteConfig con key 'basePublicUrl').
+ * Si no está configurada devuelve BIBLIOTECA_PUBLICA_URL como fallback.
+ */
+function getBasePublicUrl_() {
+  try {
+    var ss    = getSpreadsheet_();
+    var sheet = ss.getSheetByName(SHEET_NAMES.SITE_CONFIG);
+    if (!sheet) return BIBLIOTECA_PUBLICA_URL;
+    var hdr   = SHEET_HEADERS.SITE_CONFIG;
+    var map   = getHeaderIndexMap_(sheet, hdr);
+    var rows  = getRows_(sheet);
+    for (var i = 0; i < rows.length; i++) {
+      if ((rows[i][map['key']] || '') === 'basePublicUrl') {
+        return rows[i][map['value']] || BIBLIOTECA_PUBLICA_URL;
+      }
+    }
+  } catch (e) {}
+  return BIBLIOTECA_PUBLICA_URL;
+}
