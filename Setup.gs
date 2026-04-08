@@ -19,8 +19,12 @@ function setupSheets() {
     ensureHeaders_(sheet, headers);
   }
 
-  SpreadsheetApp.getActive().toast('✓ Hojas inicializadas correctamente', 'Biblioteca Telemedicina', 5);
-  Logger.log('setupSheets completado: ' + Object.keys(SHEET_NAMES).length + ' hojas creadas/verificadas.');
+
+try {
+  getSpreadsheet_().toast('✓ Hojas inicializadas correctamente', 'Biblioteca Telemedicina', 5);
+} catch (_) {
+  Logger.log('setupSheets completado correctamente.');
+}
 }
 
 // ============================================================
@@ -184,6 +188,12 @@ function tryWithAudit_(fn, context) {
   }
 }
 
+
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Biblioteca Telemedicina')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
 
 
 function runImport() {

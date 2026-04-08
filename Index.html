@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Biblioteca Telemedicina</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; color: #333; }
+
+    /* Header */
+    .header { background: linear-gradient(135deg, #04013C, #032D6B); color: white; padding: 20px 32px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+
+    /* Layout */
+    .container { max-width: 1100px; margin: 32px auto; padding: 0 24px; }
+
+    /* Search & filters */
+    .toolbar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .toolbar input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid #dde; border-radius: 8px; font-size: 14px; }
+    .toolbar select { padding: 10px 14px; border: 1px solid #dde; border-radius: 8px; font-size: 14px; background: white; }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+    .card-type { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; color: white; margin-bottom: 10px; text-transform: uppercase; }
+    .card h3 { font-size: 15px; font-weight: 700; color: #04013C; margin-bottom: 8px; line-height: 1.4; }
+    .card p { font-size: 13px; color: #666; line-height: 1.6; }
+    .card-meta { margin-top: 14px; font-size: 12px; color: #999; display: flex; justify-content: space-between; }
+
+    /* Tags */
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { background: #f0f4ff; color: #4466cc; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+
+    /* Estado */
+    .badge-review { background: #FEF3C7; color: #D97706; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+    /* Loading / empty */
+    .status { text-align: center; padding: 60px 20px; color: #888; }
+    .status .spinner { width: 36px; height: 36px; border: 3px solid #e0e0e0; border-top-color: #04013C; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Modal */
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto; }
+    .modal-bg.open { display: flex; }
+    .modal { background: white; border-radius: 16px; max-width: 700px; width: 100%; padding: 32px; position: relative; }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 22px; cursor: pointer; color: #888; }
+    .modal h2 { font-size: 22px; color: #04013C; margin-bottom: 16px; }
+    .modal-desc { font-size: 14px; line-height: 1.8; color: #444; }
+    .modal-desc p { margin-bottom: 8px; }
+    .btn-drive { display: inline-block; margin-top: 20px; background: #04013C; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .btn-drive:hover { background: #032D6B; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📚 Biblioteca Telemedicina</h1>
+    <p>Recursos institucionales · División de Innovación</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="🔍 Buscar artículos..." oninput="filterArticles()">
+    <select id="typeFilter" onchange="filterArticles()">
+      <option value="">Todos los tipos</option>
+    </select>
+    <select id="statusFilter" onchange="filterArticles()">
+      <option value="">Todos los estados</option>
+      <option value="PUBLISHED">Publicados</option>
+      <option value="NEEDS_REVIEW">En revisión</option>
+    </select>
+  </div>
+
+  <div id="content">
+    <div class="status"><div class="spinner"></div><p>Cargando artículos...</p></div>
+  </div>
+</div>
+
+<!-- Modal de detalle -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+  var allArticles = [];
+  var allTypes    = [];
+
+  // Llama a una función del backend GAS
+  function call(fn, params, cb) {
+    var args = params !== undefined ? [params] : [];
+    google.script.run
+      .withSuccessHandler(cb)
+      .withFailureHandler(function(e) {
+        document.getElementById('content').innerHTML =
+          '<div class="status"><p>⚠️ Error: ' + e.message + '</p></div>';
+      })
+      [fn].apply(null, args);
+  }
+
+  // Inicializar
+  window.onload = function() {
+    call('listArticleTypes', undefined, function(types) {
+      allTypes = types || [];
+      var sel = document.getElementById('typeFilter');
+      allTypes.forEach(function(t) {
+        var o = document.createElement('option');
+        o.value = t.typeId; o.textContent = t.name;
+        sel.appendChild(o);
+      });
+    });
+
+    call('readArticles', undefined, function(articles) {
+      allArticles = articles || [];
+      renderGrid(allArticles);
+    });
+  };
+
+  function getTypeColor(typeId) {
+    var t = allTypes.find(function(x) { return x.typeId === typeId; });
+    return t ? (t.color || '#94a3b8') : '#94a3b8';
+  }
+
+  function getTypeName(typeId) {
+    var t = allTypes.find(function(x) { return x.typeId === typeId; });
+    return t ? t.name : '';
+  }
+
+  function renderGrid(articles) {
+    var el = document.getElementById('content');
+    if (!articles.length) {
+      el.innerHTML = '<div class="status"><p>No se encontraron artículos.</p></div>';
+      return;
+    }
+    var html = '<div class="grid">';
+    articles.forEach(function(a) {
+      var color = a.typeColor || getTypeColor(a.typeId) || '#94a3b8';
+      var name  = a.typeName || getTypeName(a.typeId);
+      var tags  = (a.tags || []).map(function(t) {
+        return '<span class="tag">#' + t.name + '</span>';
+      }).join('');
+      var review = a.status === 'NEEDS_REVIEW'
+        ? '<span class="badge-review">En revisión</span>' : '';
+
+      html += '<div class="card" onclick="openArticle(\'' + a.articleId + '\')">' +
+        '<span class="card-type" style="background:' + color + '">' + name + '</span>' +
+        (review ? ' ' + review : '') +
+        '<h3>' + a.title + '</h3>' +
+        '<p>' + (a.descriptionShort || '') + '</p>' +
+        (tags ? '<div class="tags">' + tags + '</div>' : '') +
+        '<div class="card-meta">' +
+          '<span>' + (a.updatedBy || a.createdBy || '') + '</span>' +
+          '<span>' + (a.updatedAt || '').toString().slice(0,10) + '</span>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function filterArticles() {
+    var q      = document.getElementById('search').value.toLowerCase();
+    var typeId = document.getElementById('typeFilter').value;
+    var status = document.getElementById('statusFilter').value;
+
+    var filtered = allArticles.filter(function(a) {
+      var matchQ = !q || a.title.toLowerCase().includes(q) || (a.descriptionShort || '').toLowerCase().includes(q);
+      var matchT = !typeId || a.typeId === typeId;
+      var matchS = !status || a.status === status;
+      return matchQ && matchT && matchS;
+    });
+    renderGrid(filtered);
+  }
+
+  function openArticle(articleId) {
+    document.getElementById('modal-body').innerHTML = '<div class="status"><div class="spinner"></div><p>Cargando...</p></div>';
+    document.getElementById('modal').classList.add('open');
+
+    call('readArticleByArticleId', articleId, function(a) {
+      if (!a) { document.getElementById('modal-body').innerHTML = '<p>No encontrado.</p>'; return; }
+      var color  = a.typeColor || getTypeColor(a.typeId) || '#94a3b8';
+      var name   = a.typeName || getTypeName(a.typeId);
+      var driveUrl = a.driveFileId
+        ? 'https://drive.google.com/file/d/' + a.driveFileId + '/view'
+        : null;
+
+      document.getElementById('modal-body').innerHTML =
+        '<span class="card-type" style="background:' + color + '">' + name + '</span>' +
+        '<h2 style="margin-top:12px">' + a.title + '</h2>' +
+        '<div class="modal-desc" style="margin-top:16px">' + (a.descriptionHtmlSanitized || '<p>Sin descripción.</p>') + '</div>' +
+        (driveUrl ? '<a class="btn-drive" href="' + driveUrl + '" target="_blank">Ver en Drive →</a>' : '');
+    });
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+  }
+
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+</script>
+</body>
+</html>
