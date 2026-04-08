@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries" defer></script>
     <style>
       :root { --c-primary-dark:#04013C; --c-primary:#032D6B; --c-primary-mid:#03134E; --c-secondary:#8CA5CE; --c-bg:#D1DBEC; --c-text:#384254; }
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: var(--c-text); font-size: 16.5px; background: var(--c-bg); }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: var(--c-text); font-size: 16.5px; line-height: 1.5; background: var(--c-bg); }
       header { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; background: #fff; }
       main { padding: 16px; }
       .container { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
@@ -58,9 +58,9 @@
       .toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
       .search { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; width: 280px; background: #fff; font-size: 15px; }
       .search[type="date"] { padding: 10px 12px; }
-      .btn { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; }
+      .btn { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; min-height: 44px; box-sizing: border-box; }
       .btn:hover { background: #f8fafc; border-color: #d1d5db; }
-      .btn:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }
+      .btn:focus:not(:focus-visible) { outline: none; }
       .btn.primary { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
       .btn.primary:hover { background: var(--c-primary-mid); border-color: var(--c-primary-mid); }
       .btn.ghost { background: #fff; color: var(--c-primary); border-color: var(--c-secondary); }
@@ -72,7 +72,8 @@
       .icon { font-size: 20px; vertical-align: middle; }
       table thead th { background: #f8fafc; font-weight: 600; color: #374151; }
       table tbody tr:hover { background: #f9fafb; }
-      .search:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }
+      .search:focus:not(:focus-visible) { outline: none; }
+      .search:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
       table { width: 100%; border-collapse: collapse; }
       th, td { padding: 10px; border-bottom: 1px solid #eef2f7; text-align: left; }
       .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; }
@@ -117,8 +118,10 @@
       .modal { transition: opacity 0.2s ease; }
       .modal-card { animation: modalSlideIn 0.3s ease-out; }
       @keyframes modalSlideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-      /* Focus improvements */
       .btn:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+      .tag:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+      .fav-btn:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; border-radius: 8px; }
+      .app-skeleton-block { min-height: 200px; }
       /* Badge/Count styles */
       .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; background: var(--c-primary); color: #fff; border-radius: 10px; font-size: 11px; font-weight: 600; }
       /* Mobile helpers */
@@ -837,6 +840,94 @@
         }
       }
 
+      var ARTICLES_LS_KEY = 'btm_articles_cache_v1';
+      var PREFETCH_ARTICLE_DETAILS_N = 8;
+
+      function readArticlesCacheMeta() {
+        try {
+          var raw = localStorage.getItem(ARTICLES_LS_KEY);
+          if (!raw) return null;
+          var o = JSON.parse(raw);
+          if (!o || !Array.isArray(o.list)) return null;
+          return o;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function writeArticlesCache(list) {
+        try {
+          localStorage.setItem(ARTICLES_LS_KEY, JSON.stringify({ ts: Date.now(), list: list || [] }));
+        } catch (_) {}
+      }
+
+      function normalizeArticleSlugFromHash(raw) {
+        if (raw == null || raw === '') return '';
+        try {
+          var s = String(raw).trim();
+          try { s = decodeURIComponent(s); } catch (_) {}
+          var q = s.indexOf('?');
+          var h = s.indexOf('#');
+          var cut = s.length;
+          if (q >= 0) cut = Math.min(cut, q);
+          if (h >= 0) cut = Math.min(cut, h);
+          return s.substring(0, cut).trim();
+        } catch (_) {
+          return String(raw || '').trim();
+        }
+      }
+
+      function getCachedArticleListForFallback() {
+        try {
+          if (window.__LAST_ARTICLES__ && window.__LAST_ARTICLES__.length) return window.__LAST_ARTICLES__;
+          var m = readArticlesCacheMeta();
+          return m && m.list ? m.list : [];
+        } catch (_) {
+          return [];
+        }
+      }
+
+      function findCachedArticleBySlug(slug) {
+        var list = getCachedArticleListForFallback();
+        var n = normalizeArticleSlugFromHash(slug);
+        var i;
+        for (i = 0; i < list.length; i++) {
+          var a = list[i];
+          if (!a) continue;
+          if ((a.slug || '') === n) return a;
+          if (normalizeArticleSlugFromHash(a.slug || '') === n) return a;
+        }
+        for (i = 0; i < list.length; i++) {
+          var b = list[i];
+          if (b && (b.slug || '').toLowerCase() === n.toLowerCase()) return b;
+        }
+        return null;
+      }
+
+      function scheduleIdlePrefetchDetails(articleList) {
+        try {
+          if (!articleList || !articleList.length) return;
+          window.__PREFETCH_SLUGS__ = window.__PREFETCH_SLUGS__ || {};
+          var run = function() {
+            var slice = articleList.slice(0, PREFETCH_ARTICLE_DETAILS_N);
+            for (var i = 0; i < slice.length; i++) {
+              var s = slice[i] && slice[i].slug;
+              if (!s) continue;
+              if (window.__PREFETCH_SLUGS__[s]) continue;
+              window.__PREFETCH_SLUGS__[s] = true;
+              try {
+                google.script.run.withSuccessHandler(function() {}).withFailureHandler(function() {}).readArticleBySlug(s);
+              } catch (_) {}
+            }
+          };
+          if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(function() { run(); }, { timeout: 5000 });
+          } else {
+            setTimeout(run, 800);
+          }
+        } catch (_) {}
+      }
+
       // Skeleton component for loading states
       function SkeletonList() {
         var cards = [];
@@ -853,39 +944,69 @@
       function App() {
         const hash = useHash();
         const [session, setSession] = React.useState(null);
-        const [articles, setArticles] = React.useState([]);
+        const [articles, setArticles] = React.useState(function() {
+          var m = readArticlesCacheMeta();
+          return m && m.list ? m.list : [];
+        });
+        const [articlesRefreshing, setArticlesRefreshing] = React.useState(false);
         const [query, setQuery] = React.useState('');
         const [mimeFilter, setMimeFilter] = React.useState('');
         const [dateFrom, setDateFrom] = React.useState('');
         const [dateTo, setDateTo] = React.useState('');
-        const [loading, setLoading] = React.useState(true);
+        const [loading, setLoading] = React.useState(function() {
+          return !readArticlesCacheMeta();
+        });
         const [loadError, setLoadError] = React.useState(null);
         const [retryCount, setRetryCount] = React.useState(0);
 
         function loadData() {
           setLoadError(null);
-          setLoading(true);
+          var hadCache = !!readArticlesCacheMeta();
+          if (!hadCache) setLoading(true);
+          setArticlesRefreshing(!!hadCache);
           dbg('session:request');
           google.script.run
             .withSuccessHandler(function(s) { dbg('session:ok', { email: s && s.email, isAdmin: s && s.isAdmin, isGuestEditor: s && s.isGuestEditor }); window.__SESSION__ = s; setSession(s); })
             .withFailureHandler(function(err) { dbg('session:error', err && (err.message || err)); setLoadError('Error al cargar sesión: ' + (err && err.message || err)); setLoading(false); })
             .getSessionInfo();
           dbg('articles:request');
-          var timeoutId = setTimeout(function() { dbg('articles:timeout'); setLoading(false); setLoadError('Tiempo de espera agotado. Verifica tu conexión.'); }, 15000);
+          var timeoutId = setTimeout(function() {
+            dbg('articles:timeout');
+            setLoading(false);
+            setArticlesRefreshing(false);
+            if (!readArticlesCacheMeta()) setLoadError('Tiempo de espera agotado. Verifica tu conexión.');
+          }, 15000);
           google.script.run.withSuccessHandler(function(list) {
             dbg('articles:ok', { count: (list && list.length) || 0 });
             setArticles(list);
             try { window.__LAST_ARTICLES__ = list; } catch (_) {}
+            writeArticlesCache(list);
             setLoading(false);
+            setArticlesRefreshing(false);
             setLoadError(null);
             clearTimeout(timeoutId);
+            scheduleIdlePrefetchDetails(list);
             var params = new URLSearchParams(window.location.search);
             var id = params.get('id');
             if (id) {
               var found = (list || []).find(function(a) { return a.articleId === id; });
               if (found && found.slug) navigate('#/articulo/' + found.slug);
             }
-          }).withFailureHandler(function(err) { dbg('articles:error', err && (err.message || err)); setLoading(false); clearTimeout(timeoutId); setLoadError('Error al cargar artículos: ' + (err && err.message || err)); }).readArticles();
+          }).withFailureHandler(function(err) {
+            dbg('articles:error', err && (err.message || err));
+            setLoading(false);
+            setArticlesRefreshing(false);
+            clearTimeout(timeoutId);
+            if (readArticlesCacheMeta()) {
+              try {
+                var m = readArticlesCacheMeta();
+                if (m && m.list) setArticles(m.list);
+                window.__LAST_ARTICLES__ = m.list;
+              } catch (_) {}
+            } else {
+              setLoadError('Error al cargar artículos: ' + (err && err.message || err));
+            }
+          }).readArticles();
         }
 
         React.useEffect(function() { loadData(); }, [retryCount]);
@@ -930,10 +1051,10 @@
             e('span', { className: 'material-symbols-outlined icon' }, 'refresh'), 'Reintentar'
           )
         );
-        if (!session || loading) return e('div', null,
+        if (!session || loading) return e('div', { className: 'app-skeleton-block', 'aria-busy': 'true', 'aria-live': 'polite' },
           e('div', { style: { padding: '24px 0' } },
-            e('div', { className: 'skeleton', style: { height: 32, width: '40%', marginBottom: 12 } }),
-            e('div', { className: 'skeleton', style: { height: 16, width: '60%', marginBottom: 24 } })
+            e('div', { className: 'skeleton', style: { height: 32, width: '40%', marginBottom: 12, maxWidth: '100%' } }),
+            e('div', { className: 'skeleton', style: { height: 16, width: '60%', marginBottom: 24, maxWidth: '100%' } })
           ),
           e(SkeletonList)
         );
@@ -942,17 +1063,18 @@
         const route = (hash || '#/').slice(1);
         const parts = route.split('/').filter(Boolean);
         if (parts[0] === 'articulo' && parts[1]) {
-          return e(ArticleDetail, { slug: parts[1], isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor, session: session });
+          const slugNorm = normalizeArticleSlugFromHash(parts[1]);
+          return e(ArticleDetail, { slug: slugNorm, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor, session: session });
         }
         if (parts[0] === 'admin') {
           if (!session.isAdmin) return e('div', { className: 'warning' }, 'Solo administradores.');
           if (parts[1] === 'dashboard') return e(AdminDashboard);
           return e(AdminView);
         }
-        return e(ListView, { articles, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor });
+        return e(ListView, { articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor });
       }
 
-      function ListView({ articles, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin, isGuestEditor }) {
+      function ListView({ articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin, isGuestEditor }) {
         const isMobile = useIsMobile();
         const [pathologiesCount, setPathologiesCount] = React.useState('');
         const [editingCount, setEditingCount] = React.useState(false);
@@ -1070,6 +1192,17 @@
           });
           return result;
         }, [searched, selectedTypeId, selectedTags, mimeFilter, statusFilter, showFavsOnly, favs]);
+
+        const emptyReason = React.useMemo(() => {
+          const lib = articles || [];
+          if (!lib.length) return 'library_empty';
+          const q = (debouncedQuery || '').trim();
+          const hasSearch = q.length >= 2;
+          if (searched.length === 0 && hasSearch) return 'search_no_match';
+          if (faceted.length === 0) return 'filters_no_match';
+          return null;
+        }, [articles, searched, faceted, debouncedQuery]);
+
         React.useEffect(function() { setCurrentPage(1); }, [debouncedQuery, selectedTypeId, selectedTags, mimeFilter, statusFilter, showFavsOnly]);
         const totalPages = Math.max(1, Math.ceil(faceted.length / ITEMS_PER_PAGE));
         const paginatedFaceted = faceted.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -1115,8 +1248,12 @@
 
         return e(React.Fragment, null,
           e('div', { style: { marginBottom: (isAdmin || isGuestEditor) ? '12px' : '24px' } },
-            e('h1', { style: { fontSize: '32px', fontWeight: 900, color: 'var(--c-primary-dark)', marginBottom: '8px' } }, 'Artículos'),
-            e('p', { className: 'muted', style: { fontSize: '15px' } }, 'Explora y accede a todos los recursos disponibles en la biblioteca.')
+            e('h1', { style: { fontSize: '32px', fontWeight: 900, color: 'var(--c-primary-dark)', marginBottom: '8px', lineHeight: 1.2 } }, 'Artículos'),
+            e('p', { className: 'muted', style: { fontSize: '15px', lineHeight: 1.5 } }, 'Explora y accede a todos los recursos disponibles en la biblioteca.'),
+            articlesRefreshing && e('p', { className: 'muted', role: 'status', style: { fontSize: '13px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: 8 } },
+              e('span', { className: 'spinner', style: { width: 14, height: 14, borderWidth: 2 } }),
+              'Actualizando el listado…'
+            )
           ),
           // Tabs de filtro de estado (solo admin y editor invitado)
           (isAdmin || isGuestEditor) && e('div', { style: { display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' } },
@@ -1158,20 +1295,32 @@
           // Toolbar (compacta en móvil)
           (isMobile ?
             e('div', { className: 'toolbar mobile-sticky', style: { gap: '8px' } },
-              e('input', { className: 'search', placeholder: 'Buscar artículos...', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { flex: '1 1 auto', width: '100%' } }),
+              e('input', { className: 'search', placeholder: 'Buscar artículos…', 'aria-label': 'Buscar en artículos', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { flex: '1 1 auto', width: '100%' } }),
               e('div', { style: { display: 'flex', gap: 8, width: '100%' } },
                 e('button', { className: 'btn', onClick: () => setShowFilters(!showFilters), style: { flex: '1 1 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'tune'), (showFilters ? 'Ocultar filtros' : 'Filtros')),
                 isAdmin && e('button', { className: 'btn primary', onClick: () => navigate('#/admin'), style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Nuevo')
               )
             ) :
-            e('div', { className: 'toolbar', style: { marginBottom: '16px', flexWrap: 'wrap', gap: '12px' } },
-              e('input', { className: 'search', placeholder: 'Buscar artículos...', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { flex: '1 1 280px', minWidth: '200px' } }),
-              e('select', { className: 'btn', value: mimeFilter, onChange: ev => { dbg('filter:mime', ev.target.value); setMimeFilter(ev.target.value); }, style: { flex: '0 1 auto' } },
-                e('option', { value: '' }, 'Todos los tipos de archivo'),
-                mimes.map(m => e('option', { key: m, value: m }, m))
+            e('div', { className: 'toolbar', style: { marginBottom: '16px', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' } },
+              e('label', { className: 'filter-field', style: { flex: '1 1 280px', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: 4 } },
+                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Buscar'),
+                e('input', { className: 'search', placeholder: 'Título, tipo, etiquetas…', 'aria-label': 'Buscar en artículos', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { width: '100%' } })
               ),
-              e('input', { className: 'search', type: 'date', value: dateFrom, onChange: ev => { dbg('filter:dateFrom', ev.target.value); setDateFrom(ev.target.value); }, style: { flex: '0 1 160px', width: 'auto' } }),
-              e('input', { className: 'search', type: 'date', value: dateTo, onChange: ev => { dbg('filter:dateTo', ev.target.value); setDateTo(ev.target.value); }, style: { flex: '0 1 160px', width: 'auto' } }),
+              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Tipo de archivo'),
+                e('select', { className: 'btn', value: mimeFilter, onChange: ev => { dbg('filter:mime', ev.target.value); setMimeFilter(ev.target.value); }, 'aria-label': 'Filtrar por tipo de archivo', style: { minWidth: '140px' } },
+                  e('option', { value: '' }, 'Todos'),
+                  mimes.map(m => e('option', { key: m, value: m }, m))
+                )
+              ),
+              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Desde'),
+                e('input', { className: 'search', type: 'date', value: dateFrom, onChange: ev => { dbg('filter:dateFrom', ev.target.value); setDateFrom(ev.target.value); }, 'aria-label': 'Fecha de creación desde', style: { width: 'auto' } })
+              ),
+              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Hasta'),
+                e('input', { className: 'search', type: 'date', value: dateTo, onChange: ev => { dbg('filter:dateTo', ev.target.value); setDateTo(ev.target.value); }, 'aria-label': 'Fecha de creación hasta', style: { width: 'auto' } })
+              ),
               e('button', { className: 'btn' + (showFavsOnly ? ' primary' : ''), onClick: function() { setShowFavsOnly(!showFavsOnly); }, title: 'Mis favoritos', style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, showFavsOnly ? 'star' : 'star_border'), favs.length > 0 && e('span', { className: 'badge', style: { marginLeft: 4 } }, String(favs.length))),
               isAdmin && e('button', { className: 'btn', onClick: function() { exportToCSV(faceted); }, title: 'Exportar CSV', style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'download')),
               isAdmin && e('button', { className: 'btn primary', onClick: () => navigate('#/admin'), style: { flex: '0 1 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Nuevo')
@@ -1214,10 +1363,18 @@
             ),
             // centro: lista agrupada
             e('section', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
-              faceted.length === 0 ? e('div', { className: 'card empty-state' },
-                e('span', { className: 'material-symbols-outlined empty-state-icon' }, 'search_off'),
-                e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'No se encontraron artículos'),
-                e('p', { className: 'muted', style: { margin: 0 } }, 'Intenta ajustar tus filtros de búsqueda o selecciona diferentes categorías.')
+              faceted.length === 0 ? e('div', { className: 'card empty-state', role: 'status' },
+                e('span', { className: 'material-symbols-outlined empty-state-icon' }, emptyReason === 'library_empty' ? 'inventory_2' : 'filter_alt_off'),
+                emptyReason === 'library_empty' ? e(React.Fragment, null,
+                  e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'Aún no hay artículos'),
+                  e('p', { className: 'muted', style: { margin: 0 } }, 'Cuando se publiquen recursos en la biblioteca, aparecerán aquí.')
+                ) : emptyReason === 'search_no_match' ? e(React.Fragment, null,
+                  e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'Sin resultados para tu búsqueda'),
+                  e('p', { className: 'muted', style: { margin: 0 } }, 'Prueba otras palabras clave o borra el texto de búsqueda para ver todo el catálogo.')
+                ) : e(React.Fragment, null,
+                  e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'Nada coincide con los filtros'),
+                  e('p', { className: 'muted', style: { margin: 0 } }, 'Quita tipo, fechas, etiquetas o favoritos para ampliar el resultado.')
+                )
               ) : grouped.map((g, gi) => e('div', { key: gi, className: 'card', style: { padding: '0' } },
                 e('div', { style: { padding: '12px 16px', borderBottom: '1px solid #eef2f7', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' } },
                   e('span', { className: 'tag', style: { background: '#fff', borderColor: '#e5e7eb' } }, g.header.name || 'General')
@@ -1308,8 +1465,68 @@
         const [loadingVersions, setLoadingVersions] = React.useState(false);
 
         React.useEffect(() => {
+          if (!slug) {
+            setArticle(null);
+            setLoading(false);
+            return;
+          }
+          setLoading(true);
+          setArticle(null);
           dbg('article:request', { slug });
-          google.script.run.withSuccessHandler((a) => { dbg('article:ok', { found: !!a }); setArticle(a); setLoading(false); }).withFailureHandler((err) => { dbg('article:error', err && (err.message || err)); setLoading(false); }).readArticleBySlug(slug);
+          google.script.run
+            .withSuccessHandler(function(a) {
+              if (a) {
+                dbg('article:ok', { found: true });
+                setArticle(a);
+                setLoading(false);
+                return;
+              }
+              var found = findCachedArticleBySlug(slug);
+              if (found && found.slug && found.slug !== slug) {
+                dbg('article:fallback:redirect', { from: slug, to: found.slug });
+                setLoading(false);
+                navigate('#/articulo/' + found.slug);
+                return;
+              }
+              if (found && found.articleId) {
+                google.script.run
+                  .withSuccessHandler(function(full) {
+                    setArticle(full || null);
+                    setLoading(false);
+                    if (full && full.slug && full.slug !== slug) navigate('#/articulo/' + full.slug);
+                  })
+                  .withFailureHandler(function(err) {
+                    dbg('article:fallback:id:error', err && (err.message || err));
+                    setArticle(null);
+                    setLoading(false);
+                  })
+                  .readArticleByArticleId(found.articleId);
+                return;
+              }
+              dbg('article:ok', { found: false });
+              setArticle(null);
+              setLoading(false);
+            })
+            .withFailureHandler(function(err) {
+              dbg('article:error', err && (err.message || err));
+              var found = findCachedArticleBySlug(slug);
+              if (found && found.articleId) {
+                google.script.run
+                  .withSuccessHandler(function(full) {
+                    setArticle(full || null);
+                    setLoading(false);
+                  })
+                  .withFailureHandler(function() {
+                    setArticle(null);
+                    setLoading(false);
+                  })
+                  .readArticleByArticleId(found.articleId);
+                return;
+              }
+              setArticle(null);
+              setLoading(false);
+            })
+            .readArticleBySlug(slug);
         }, [slug]);
 
         React.useEffect(() => {

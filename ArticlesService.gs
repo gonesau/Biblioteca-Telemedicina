@@ -15,6 +15,70 @@ function assertAccessOrThrow_(requireAdmin) {
   return { email: email, isAdmin: isAdmin, isGuestEditor: isGuestEditor };
 }
 
+function buildArticleTypesMap_() {
+  var typesSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
+  var typesMap = {};
+  if (!typesSheet) return typesMap;
+  var th = SHEET_HEADERS.ARTICLE_TYPES;
+  var tm = getHeaderIndexMap_(typesSheet, th);
+  var trows = getRows_(typesSheet);
+  for (var ti = 0; ti < trows.length; ti++) {
+    var tr = trows[ti];
+    typesMap[tr[tm['typeId']]] = {
+      typeId: tr[tm['typeId']],
+      name: tr[tm['name']],
+      slug: tr[tm['slug']],
+      color: tr[tm['color']],
+      order: tr[tm['order']]
+    };
+  }
+  return typesMap;
+}
+
+function buildTagsByArticleIdMap_() {
+  var tagsByArticle = {};
+  var tagsSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.TAGS);
+  var atSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TAGS);
+  if (!tagsSheet || !atSheet) return tagsByArticle;
+  var tgHdr = SHEET_HEADERS.TAGS;
+  var tgMap = getHeaderIndexMap_(tagsSheet, tgHdr);
+  var tgRows = getRows_(tagsSheet);
+  var tagById = {};
+  for (var gj = 0; gj < tgRows.length; gj++) {
+    var gr = tgRows[gj];
+    tagById[gr[tgMap['tagId']]] = { tagId: gr[tgMap['tagId']], name: gr[tgMap['name']], slug: gr[tgMap['slug']] };
+  }
+  var atHdr = SHEET_HEADERS.ARTICLE_TAGS;
+  var atMap = getHeaderIndexMap_(atSheet, atHdr);
+  var atRows = getRows_(atSheet);
+  for (var ai = 0; ai < atRows.length; ai++) {
+    var ar = atRows[ai];
+    var aid = ar[atMap['articleId']];
+    var tid = ar[atMap['tagId']];
+    if (!tagsByArticle[aid]) tagsByArticle[aid] = [];
+    if (tagById[tid]) tagsByArticle[aid].push(tagById[tid]);
+  }
+  return tagsByArticle;
+}
+
+function normalizeSlugParam_(s) {
+  if (s == null) return '';
+  s = String(s).trim();
+  try {
+    s = decodeURIComponent(s);
+  } catch (e) {}
+  var q = s.indexOf('?');
+  var h = s.indexOf('#');
+  var cut = s.length;
+  if (q >= 0) cut = Math.min(cut, q);
+  if (h >= 0) cut = Math.min(cut, h);
+  return s.substring(0, cut).trim();
+}
+
+function slugEquals_(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
 function readArticles() {
   return tryWithAudit_(function() {
     var auth = assertAccessOrThrow_(false);
@@ -29,46 +93,8 @@ function readArticles() {
     var hdrs = SHEET_HEADERS.ARTICLES;
     var map = getHeaderIndexMap_(sheet, hdrs);
     var rows = getRows_(sheet);
-    var typesSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
-    var typesMap = {};
-    if (typesSheet) {
-      var th = SHEET_HEADERS.ARTICLE_TYPES;
-      var tm = getHeaderIndexMap_(typesSheet, th);
-      var trows = getRows_(typesSheet);
-      for (var ti = 0; ti < trows.length; ti++) {
-        var tr = trows[ti];
-        typesMap[tr[tm['typeId']]] = {
-          typeId: tr[tm['typeId']],
-          name: tr[tm['name']],
-          slug: tr[tm['slug']],
-          color: tr[tm['color']],
-          order: tr[tm['order']]
-        };
-      }
-    }
-    var tagsByArticle = {};
-    var tagsSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.TAGS);
-    var atSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TAGS);
-    if (tagsSheet && atSheet) {
-      var tgHdr = SHEET_HEADERS.TAGS;
-      var tgMap = getHeaderIndexMap_(tagsSheet, tgHdr);
-      var tgRows = getRows_(tagsSheet);
-      var tagById = {};
-      for (var gj = 0; gj < tgRows.length; gj++) {
-        var gr = tgRows[gj];
-        tagById[gr[tgMap['tagId']]] = { tagId: gr[tgMap['tagId']], name: gr[tgMap['name']], slug: gr[tgMap['slug']] };
-      }
-      var atHdr = SHEET_HEADERS.ARTICLE_TAGS;
-      var atMap = getHeaderIndexMap_(atSheet, atHdr);
-      var atRows = getRows_(atSheet);
-      for (var ai = 0; ai < atRows.length; ai++) {
-        var ar = atRows[ai];
-        var aid = ar[atMap['articleId']];
-        var tid = ar[atMap['tagId']];
-        if (!tagsByArticle[aid]) tagsByArticle[aid] = [];
-        if (tagById[tid]) tagsByArticle[aid].push(tagById[tid]);
-      }
-    }
+    var typesMap = buildArticleTypesMap_();
+    var tagsByArticle = buildTagsByArticleIdMap_();
     var list = [];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
@@ -105,56 +131,30 @@ function readArticles() {
 function readArticleBySlug(slug) {
   return tryWithAudit_(function() {
     var auth = assertAccessOrThrow_(false);
+    var canSeeReview = auth.isAdmin || auth.isGuestEditor;
+    var normSlug = normalizeSlugParam_(slug);
+    var slugCacheKey = normSlug.toLowerCase();
+    var detailKey = getArticleDetailCacheKeyBySlug_(slugCacheKey, canSeeReview);
+    var fromCache = getCachedJSON_(detailKey);
+    if (fromCache) return fromCache;
+
     var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
     var hdrs = SHEET_HEADERS.ARTICLES;
     var map = getHeaderIndexMap_(sheet, hdrs);
     var rows = getRows_(sheet);
-    // Prepara lookups de types y tags
-    var typesSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
-    var typesMap = {};
-    if (typesSheet) {
-      var th = SHEET_HEADERS.ARTICLE_TYPES;
-      var tm = getHeaderIndexMap_(typesSheet, th);
-      var trows = getRows_(typesSheet);
-      for (var ti = 0; ti < trows.length; ti++) {
-        var tr = trows[ti];
-        typesMap[tr[tm['typeId']]] = {
-          typeId: tr[tm['typeId']], name: tr[tm['name']], slug: tr[tm['slug']], color: tr[tm['color']], order: tr[tm['order']]
-        };
-      }
-    }
-    var tagsSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.TAGS);
-    var atSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TAGS);
-    var tagsForArticle = function(articleId) {
-      var out = [];
-      if (!tagsSheet || !atSheet) return out;
-      var tgHdr = SHEET_HEADERS.TAGS;
-      var tgMap = getHeaderIndexMap_(tagsSheet, tgHdr);
-      var atHdr = SHEET_HEADERS.ARTICLE_TAGS;
-      var atMap = getHeaderIndexMap_(atSheet, atHdr);
-      var tgRows = getRows_(tagsSheet);
-      var atRows = getRows_(atSheet);
-      var tagById = {};
-      for (var gj = 0; gj < tgRows.length; gj++) tagById[tgRows[gj][tgMap['tagId']]] = { tagId: tgRows[gj][tgMap['tagId']], name: tgRows[gj][tgMap['name']], slug: tgRows[gj][tgMap['slug']] };
-      for (var ai = 0; ai < atRows.length; ai++) {
-        if (atRows[ai][atMap['articleId']] === articleId) {
-          var tid = atRows[ai][atMap['tagId']];
-          if (tagById[tid]) out.push(tagById[tid]);
-        }
-      }
-      return out;
-    };
+    var typesMap = buildArticleTypesMap_();
+    var tagsByArticle = buildTagsByArticleIdMap_();
     var slugIdx = map['slug'];
-    var canSeeReview = auth.isAdmin || auth.isGuestEditor;
     for (var i = 0; i < rows.length; i++) {
-      if ((rows[i][slugIdx] || '') === slug) {
+      if (slugEquals_(rows[i][slugIdx], normSlug)) {
         var r = rows[i];
         var status = r[map['status']] || 'PUBLISHED';
         if (!canSeeReview && status === 'NEEDS_REVIEW') return null;
 
         var typeObj = typesMap[r[map['typeId']]] || null;
-        return {
-          articleId: r[map['articleId']],
+        var aid = r[map['articleId']];
+        var out = {
+          articleId: aid,
           title: r[map['title']],
           slug: r[map['slug']],
           typeId: r[map['typeId']],
@@ -168,8 +168,11 @@ function readArticleBySlug(slug) {
           createdBy: r[map['createdBy']],
           updatedBy: r[map['updatedBy']],
           status: status,
-          tags: tagsForArticle(r[map['articleId']])
+          tags: tagsByArticle[aid] || []
         };
+        setCachedJSON_(detailKey, out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
+        setCachedJSON_(getArticleDetailCacheKeyByArticleId_(aid, canSeeReview), out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
+        return out;
       }
     }
     return null;
@@ -183,55 +186,28 @@ function readArticleBySlug(slug) {
 function readArticleByArticleId(articleId) {
   return tryWithAudit_(function() {
     var auth = assertAccessOrThrow_(false);
+    var canSeeReview = auth.isAdmin || auth.isGuestEditor;
+    var wantId = (articleId || '').toString();
+    var detailKey = getArticleDetailCacheKeyByArticleId_(wantId, canSeeReview);
+    var fromCache = getCachedJSON_(detailKey);
+    if (fromCache) return fromCache;
+
     var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
     var hdrs = SHEET_HEADERS.ARTICLES;
     var map = getHeaderIndexMap_(sheet, hdrs);
     var rows = getRows_(sheet);
-    var typesSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
-    var typesMap = {};
-    if (typesSheet) {
-      var th = SHEET_HEADERS.ARTICLE_TYPES;
-      var tm = getHeaderIndexMap_(typesSheet, th);
-      var trows = getRows_(typesSheet);
-      for (var ti = 0; ti < trows.length; ti++) {
-        var tr = trows[ti];
-        typesMap[tr[tm['typeId']]] = {
-          typeId: tr[tm['typeId']], name: tr[tm['name']], slug: tr[tm['slug']], color: tr[tm['color']], order: tr[tm['order']]
-        };
-      }
-    }
-    var tagsSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.TAGS);
-    var atSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TAGS);
-    var tagsForArticle = function(aid) {
-      var out = [];
-      if (!tagsSheet || !atSheet) return out;
-      var tgHdr = SHEET_HEADERS.TAGS;
-      var tgMap = getHeaderIndexMap_(tagsSheet, tgHdr);
-      var atHdr = SHEET_HEADERS.ARTICLE_TAGS;
-      var atMap = getHeaderIndexMap_(atSheet, atHdr);
-      var tgRows = getRows_(tagsSheet);
-      var atRows = getRows_(atSheet);
-      var tagById = {};
-      for (var gj = 0; gj < tgRows.length; gj++) tagById[tgRows[gj][tgMap['tagId']]] = { tagId: tgRows[gj][tgMap['tagId']], name: tgRows[gj][tgMap['name']], slug: tgRows[gj][tgMap['slug']] };
-      for (var ai = 0; ai < atRows.length; ai++) {
-        if (atRows[ai][atMap['articleId']] === aid) {
-          var tid = atRows[ai][atMap['tagId']];
-          if (tagById[tid]) out.push(tagById[tid]);
-        }
-      }
-      return out;
-    };
+    var typesMap = buildArticleTypesMap_();
+    var tagsByArticle = buildTagsByArticleIdMap_();
     var idIdx = map['articleId'];
-    var wantId = (articleId || '').toString();
-    var canSeeReview = auth.isAdmin || auth.isGuestEditor;
     for (var i = 0; i < rows.length; i++) {
       if ((rows[i][idIdx] || '').toString() === wantId) {
         var r = rows[i];
         var status = r[map['status']] || 'PUBLISHED';
         if (!canSeeReview && status === 'NEEDS_REVIEW') return null;
         var typeObj = typesMap[r[map['typeId']]] || null;
-        return {
-          articleId: r[map['articleId']],
+        var aid = r[map['articleId']];
+        var out = {
+          articleId: aid,
           title: r[map['title']],
           slug: r[map['slug']],
           typeId: r[map['typeId']],
@@ -245,8 +221,11 @@ function readArticleByArticleId(articleId) {
           createdBy: r[map['createdBy']],
           updatedBy: r[map['updatedBy']],
           status: status,
-          tags: tagsForArticle(r[map['articleId']])
+          tags: tagsByArticle[aid] || []
         };
+        setCachedJSON_(detailKey, out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
+        setCachedJSON_(getArticleDetailCacheKeyBySlug_(normalizeSlugParam_(out.slug).toLowerCase(), canSeeReview), out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
+        return out;
       }
     }
     return null;

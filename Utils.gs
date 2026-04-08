@@ -6,6 +6,8 @@
 // --- Constantes de caché ---
 var CACHE_KEY_ARTICLES = 'wiki_articles_v2';
 var CACHE_TTL_SECONDS  = 300; // 5 minutos
+var CACHE_TTL_ARTICLE_DETAIL_SECONDS = 120; // detalle por slug/id (invalidación por bump al actualizar listado)
+var WIKI_ARTICLE_CACHE_GEN_KEY = 'wiki_article_cache_gen';
 
 // --- Date / Time ---
 function now_() {
@@ -198,8 +200,39 @@ function setCachedJSON_(key, obj, ttl) {
   }
 }
 
+function bumpArticleCacheGeneration_() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var n = parseInt(props.getProperty(WIKI_ARTICLE_CACHE_GEN_KEY) || '0', 10);
+    if (isNaN(n)) n = 0;
+    props.setProperty(WIKI_ARTICLE_CACHE_GEN_KEY, String(n + 1));
+  } catch (e) {}
+}
+
+function getArticleDetailCacheGen_() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty(WIKI_ARTICLE_CACHE_GEN_KEY) || '0';
+  } catch (e) {
+    return '0';
+  }
+}
+
+/** Clave estable para CacheService (slug puede tener caracteres raros). */
+function sanitizeCacheKeySegment_(s) {
+  return String(s || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function getArticleDetailCacheKeyBySlug_(slug, canSeeReview) {
+  return 'wiki_art_d_v1_' + getArticleDetailCacheGen_() + '_' + (canSeeReview ? 'all' : 'pub') + '_' + sanitizeCacheKeySegment_(slug);
+}
+
+function getArticleDetailCacheKeyByArticleId_(articleId, canSeeReview) {
+  return 'wiki_art_id_v1_' + getArticleDetailCacheGen_() + '_' + (canSeeReview ? 'all' : 'pub') + '_' + sanitizeCacheKeySegment_(articleId);
+}
+
 function invalidateArticlesCache_() {
   try {
+    bumpArticleCacheGeneration_();
     var cache = CacheService.getScriptCache();
     var keys  = [];
     for (var i = 0; i < 20; i++) {
