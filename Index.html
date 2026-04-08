@@ -477,10 +477,22 @@
       }
 
       function navigate(hash) {
-        const from = location.hash;
-        if (location.hash !== hash) location.hash = hash;
-        dbg('navigate', { from, to: hash });
-        renderApp();
+        const from = location.hash || '#/';
+        const to = hash || '#/';
+        if (from !== to) {
+          location.hash = to;
+          dbg('navigate', { from, to, mode: 'hash' });
+          return;
+        }
+        // Si navegamos al mismo hash, forzar actualización del router sin remount.
+        dbg('navigate', { from, to, mode: 'same-hash' });
+        try {
+          // Algunos navegadores no emiten hashchange si el hash no cambia.
+          if (typeof HashChangeEvent === 'function') window.dispatchEvent(new HashChangeEvent('hashchange'));
+          else window.dispatchEvent(new Event('hashchange'));
+        } catch (_) {
+          try { window.dispatchEvent(new Event('hashchange')); } catch (_) {}
+        }
       }
 
       function goHomeReload() {
