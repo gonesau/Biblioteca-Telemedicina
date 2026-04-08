@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+      .wrap { padding: 20px; max-width: 520px; }
+      h3 { margin: 0 0 8px; color: #032D6B; }
+      p { margin: 6px 0 12px; color: #384254; font-size: 14px; }
+      input[type="text"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+      .row { margin: 10px 0; }
+      .btn { background:#032D6B; color:#fff; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; }
+      .btn.cancel { background:#6b7280; }
+      .actions { display:flex; gap:10px; margin-top: 12px; }
+      #result { margin-top:16px; padding:12px; border-radius:8px; background:#f8fafc; border:1px solid #e5e7eb; display:none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h3>Importar artículos desde otra hoja</h3>
+      <p>Ingresa el ID de la hoja de cálculo fuente y el nombre de la hoja con los artículos.</p>
+      <div class="row">
+        <label>ID de la hoja fuente</label>
+        <input type="text" id="sourceId" placeholder="Ej: 1abc123..." />
+      </div>
+      <div class="row">
+        <label>Nombre de la hoja (opcional, por defecto "Articles")</label>
+        <input type="text" id="sheetName" placeholder="Articles" />
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="skipDupes" checked /> Omitir artículos duplicados (mismo título)</label>
+      </div>
+      <div class="actions">
+        <button id="importBtn" class="btn" onclick="importData()">Importar</button>
+        <button class="btn cancel" onclick="google.script.host.close()">Cancelar</button>
+      </div>
+      <div id="result"></div>
+    </div>
+
+    <script>
+      function importData() {
+        try {
+          var btn = document.getElementById('importBtn');
+          var result = document.getElementById('result');
+          var sourceId = document.getElementById('sourceId').value.trim();
+          var sheetName = document.getElementById('sheetName').value.trim() || 'Articles';
+          var skipDupes = document.getElementById('skipDupes').checked;
+          if (!sourceId) { alert('Por favor ingresa el ID de la hoja fuente'); return; }
+          result.style.display = 'block';
+          result.innerHTML = '<p>Importando... por favor espera.</p>';
+          if (btn) { btn.disabled = true; btn.textContent = 'Importando...'; }
+          google.script.run
+            .withSuccessHandler(function(res){
+              if (btn) { btn.disabled = false; btn.textContent = 'Importar'; }
+              var html = '<h4>✓ Importación completada</h4>' +
+                        '<p><strong>Importados:</strong> ' + ((res && res.imported) || 0) + '</p>';
+              if (res && res.skipped) html += '<p><strong>Omitidos:</strong> ' + res.skipped + '</p>';
+              if (res && res.errors && res.errors.length) {
+                html += '<details><summary>Errores (' + res.errors.length + ')</summary><ul style="max-height:160px;overflow:auto">';
+                for (var i=0; i<Math.min(res.errors.length, 50); i++) {
+                  html += '<li style="font-size:12px">' + res.errors[i] + '</li>';
+                }
+                html += '</ul></details>';
+              }
+              html += '<p><strong>Próximos pasos:</strong></p>' +
+                      '<ol><li>Ejecuta Migrar tipos y tags (v1)</li><li>Ejecuta Aplicar restricciones Drive (batch)</li></ol>';
+              result.innerHTML = html;
+            })
+            .withFailureHandler(function(err){
+              if (btn) { btn.disabled = false; btn.textContent = 'Importar'; }
+              var msg = (err && (err.message || err.toString())) || 'Error desconocido';
+              result.innerHTML = '<p style="color:#dc2626">✗ Error: ' + msg + '</p>';
+            })
+            .importArticlesFromSheet(sourceId, sheetName, null, skipDupes);
+        } catch (e) {
+          alert('Se produjo un error en el diálogo: ' + (e && e.message || e));
+        }
+      }
+    </script>
+  </body>
+  </html>
+
+
