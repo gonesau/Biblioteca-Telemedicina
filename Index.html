@@ -964,49 +964,65 @@
           var hadCache = !!readArticlesCacheMeta();
           if (!hadCache) setLoading(true);
           setArticlesRefreshing(!!hadCache);
+          var articlesTimeoutId = null;
           dbg('session:request');
           google.script.run
-            .withSuccessHandler(function(s) { dbg('session:ok', { email: s && s.email, isAdmin: s && s.isAdmin, isGuestEditor: s && s.isGuestEditor }); window.__SESSION__ = s; setSession(s); })
-            .withFailureHandler(function(err) { dbg('session:error', err && (err.message || err)); setLoadError('Error al cargar sesión: ' + (err && err.message || err)); setLoading(false); })
+            .withSuccessHandler(function(s) {
+              dbg('session:ok', { email: s && s.email, isAdmin: s && s.isAdmin, isGuestEditor: s && s.isGuestEditor });
+              window.__SESSION__ = s;
+              setSession(s);
+              if (s && s.allowed === false) {
+                setLoading(false);
+                setArticlesRefreshing(false);
+                return;
+              }
+              dbg('articles:request');
+              articlesTimeoutId = setTimeout(function() {
+                dbg('articles:timeout');
+                setLoading(false);
+                setArticlesRefreshing(false);
+                if (!readArticlesCacheMeta()) setLoadError('Tiempo de espera agotado. Verifica tu conexión.');
+              }, 15000);
+              google.script.run.withSuccessHandler(function(list) {
+                var safeList = list || [];
+                dbg('articles:ok', { count: safeList.length });
+                setArticles(safeList);
+                try { window.__LAST_ARTICLES__ = safeList; } catch (_) {}
+                writeArticlesCache(safeList);
+                setLoading(false);
+                setArticlesRefreshing(false);
+                setLoadError(null);
+                clearTimeout(articlesTimeoutId);
+                scheduleIdlePrefetchDetails(safeList);
+                var params = new URLSearchParams(window.location.search);
+                var id = params.get('id');
+                if (id) {
+                  var found = safeList.find(function(a) { return a.articleId === id; });
+                  if (found && found.slug) navigate('#/articulo/' + found.slug);
+                }
+              }).withFailureHandler(function(err) {
+                dbg('articles:error', err && (err.message || err));
+                setLoading(false);
+                setArticlesRefreshing(false);
+                clearTimeout(articlesTimeoutId);
+                if (readArticlesCacheMeta()) {
+                  try {
+                    var m = readArticlesCacheMeta();
+                    if (m && m.list) setArticles(m.list);
+                    window.__LAST_ARTICLES__ = m.list;
+                  } catch (_) {}
+                } else {
+                  setLoadError('Error al cargar artículos: ' + (err && err.message || err));
+                }
+              }).readArticles();
+            })
+            .withFailureHandler(function(err) {
+              dbg('session:error', err && (err.message || err));
+              if (articlesTimeoutId) clearTimeout(articlesTimeoutId);
+              setLoadError('Error al cargar sesión: ' + (err && err.message || err));
+              setLoading(false);
+            })
             .getSessionInfo();
-          dbg('articles:request');
-          var timeoutId = setTimeout(function() {
-            dbg('articles:timeout');
-            setLoading(false);
-            setArticlesRefreshing(false);
-            if (!readArticlesCacheMeta()) setLoadError('Tiempo de espera agotado. Verifica tu conexión.');
-          }, 15000);
-          google.script.run.withSuccessHandler(function(list) {
-            dbg('articles:ok', { count: (list && list.length) || 0 });
-            setArticles(list);
-            try { window.__LAST_ARTICLES__ = list; } catch (_) {}
-            writeArticlesCache(list);
-            setLoading(false);
-            setArticlesRefreshing(false);
-            setLoadError(null);
-            clearTimeout(timeoutId);
-            scheduleIdlePrefetchDetails(list);
-            var params = new URLSearchParams(window.location.search);
-            var id = params.get('id');
-            if (id) {
-              var found = (list || []).find(function(a) { return a.articleId === id; });
-              if (found && found.slug) navigate('#/articulo/' + found.slug);
-            }
-          }).withFailureHandler(function(err) {
-            dbg('articles:error', err && (err.message || err));
-            setLoading(false);
-            setArticlesRefreshing(false);
-            clearTimeout(timeoutId);
-            if (readArticlesCacheMeta()) {
-              try {
-                var m = readArticlesCacheMeta();
-                if (m && m.list) setArticles(m.list);
-                window.__LAST_ARTICLES__ = m.list;
-              } catch (_) {}
-            } else {
-              setLoadError('Error al cargar artículos: ' + (err && err.message || err));
-            }
-          }).readArticles();
         }
 
         React.useEffect(function() { loadData(); }, [retryCount]);
@@ -1043,7 +1059,7 @@
           }
         }, [session]);
 
-        if (loadError && !session) return e('div', { className: 'card', style: { textAlign: 'center', maxWidth: 480, margin: '80px auto', padding: '40px' } },
+        if (loadError) return e('div', { className: 'card', style: { textAlign: 'center', maxWidth: 480, margin: '80px auto', padding: '40px' } },
           e('span', { className: 'material-symbols-outlined', style: { fontSize: 48, color: '#dc2626', marginBottom: 12 } }, 'cloud_off'),
           e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'Error de conexión'),
           e('p', { className: 'muted', style: { marginBottom: 16 } }, loadError),
