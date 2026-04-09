@@ -242,3 +242,16 @@ function invalidateArticlesCache_() {
     cache.removeAll(keys);
   } catch (e) {}
 }
+
+function testEmailNotification() {
+  var fakeArticle = {
+    articleId: 'test-001',
+    title: 'Artículo de prueba',
+    slug: 'articulo-de-prueba',
+    descriptionHtmlSanitized: '<p>Descripción de prueba.</p>',
+    driveMimeType: 'Protocolo',
+    createdBy: 'test@telesalud.gob.sv',
+    updatedBy: 'test@telesalud.gob.sv'
+  };
+  notifyChange_('create', fakeArticle);
+}

@@ -96,3 +96,12 @@ function getBasePublicUrl_() {
   } catch (e) {}
   return BIBLIOTECA_PUBLICA_URL;
 }
+
+function getEnvironment() {
+  var props = PropertiesService.getScriptProperties();
+  return props.getProperty('ENV') || 'production';
+}
+
+function isDev() {
+  return getEnvironment() === 'development';
+}
