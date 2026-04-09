@@ -251,7 +251,9 @@
               <label style="display:block; font-weight:600; margin-bottom:6px; color:var(--c-primary-dark);">
                 <span class="material-symbols-outlined icon" style="font-size:18px;">category</span>Categoría
               </label>
-              <input id="edit-mime-input" class="search" placeholder="Ej: protocolo, tamizaje, etc." style="width:100%; max-width:none;" />
+              <select id="edit-type-select" class="search" style="width:100%; max-width:none;" aria-label="Categoría del artículo">
+                <option value="">Cargando categorías…</option>
+              </select>
             </div>
             <div style="margin-bottom:16px;">
               <label style="display:block; font-weight:600; margin-bottom:6px; color:var(--c-primary-dark);">
@@ -603,12 +605,38 @@
 
       // --- Modal de edición ---
       window.__editQuill = null;
+      function fillArticleTypeSelect(selectEl, selectedTypeId, onDone) {
+        if (!selectEl) { if (onDone) onDone(); return; }
+        google.script.run
+          .withSuccessHandler(function(list) {
+            window.__ARTICLE_TYPES__ = list || [];
+            selectEl.innerHTML = '';
+            var opt0 = document.createElement('option');
+            opt0.value = '';
+            opt0.textContent = 'Sin categoría';
+            selectEl.appendChild(opt0);
+            (list || []).forEach(function(t) {
+              var o = document.createElement('option');
+              o.value = (t.typeId || '').toString();
+              o.textContent = (t.name || t.slug || '').toString();
+              selectEl.appendChild(o);
+            });
+            selectEl.value = (selectedTypeId || '').toString();
+            if (onDone) onDone();
+          })
+          .withFailureHandler(function(err) {
+            try { showToast('Error al cargar categorías: ' + (err && err.message || err), 'error'); } catch (_) {}
+            selectEl.innerHTML = '<option value="">Sin categoría</option>';
+            if (onDone) onDone();
+          })
+          .listArticleTypes();
+      }
       function openEditModal(article) {
         try {
           const modal = document.getElementById('edit-modal');
           const titleEl = document.getElementById('edit-title-input');
           const fileIdEl = document.getElementById('edit-fileid-input');
-          const mimeEl = document.getElementById('edit-mime-input');
+          const typeSel = document.getElementById('edit-type-select');
           const editorEl = document.getElementById('edit-editor');
           let tagsEl = document.getElementById('edit-tags-input');
           const titleErrorEl = document.getElementById('edit-title-error');
@@ -627,7 +655,7 @@
           window.__CURRENT_EDIT__ = a;
           titleEl.value = a.title || '';
           fileIdEl.value = a.driveFileId || '';
-          mimeEl.value = a.driveMimeType || '';
+          fillArticleTypeSelect(typeSel, a.typeId || '');
           const saveBtnEarly = document.getElementById('edit-save-btn');
           const loadDescForId = a.articleId;
           window.__editQuill.root.innerHTML = '<p><br></p>';
@@ -640,6 +668,8 @@
               if (full && typeof full === 'object') {
                 Object.assign(window.__CURRENT_EDIT__, full);
                 window.__editQuill.root.innerHTML = full.descriptionHtmlSanitized || '';
+                var ts = document.getElementById('edit-type-select');
+                if (ts) ts.value = (full.typeId || '').toString();
               } else {
                 window.__editQuill.root.innerHTML = a.descriptionHtmlSanitized || '';
                 try { showToast('No se pudo cargar la descripción completa.', 'error'); } catch (_) {}
@@ -701,12 +731,13 @@
               return;
             }
             const statusElForm = document.getElementById('edit-status-input');
+            const typeSelNow = document.getElementById('edit-type-select');
             const payload = {
               articleId: window.__CURRENT_EDIT__.articleId,
               title: titleVal,
               descriptionHtml: window.__editQuill.root.innerHTML,
               driveFileId: fileIdEl.value,
-              driveMimeType: mimeEl.value,
+              typeId: typeSelNow ? typeSelNow.value : '',
               tagsText: (tagsEl && tagsEl.value) || '',
               status: statusElForm ? statusElForm.value : 'PUBLISHED'
             };
@@ -1049,6 +1080,11 @@
                 btnDash.innerHTML = '<span class="material-symbols-outlined icon">dashboard</span>Dashboard';
                 btnDash.onclick = function() { navigate('#/admin/dashboard'); };
                 top.appendChild(btnDash);
+                var btnTypes = document.createElement('button');
+                btnTypes.className = 'btn ghost';
+                btnTypes.innerHTML = '<span class="material-symbols-outlined icon">category</span>Categorías';
+                btnTypes.onclick = function() { navigate('#/admin/types'); };
+                top.appendChild(btnTypes);
                 var btnNew = document.createElement('button');
                 btnNew.className = 'btn primary';
                 btnNew.innerHTML = '<span class="material-symbols-outlined icon">add</span>Nuevo';
@@ -1085,6 +1121,7 @@
         if (parts[0] === 'admin') {
           if (!session.isAdmin) return e('div', { className: 'warning' }, 'Solo administradores.');
           if (parts[1] === 'dashboard') return e(AdminDashboard);
+          if (parts[1] === 'types') return e(AdminTypes);
           return e(AdminView);
         }
         return e(ListView, { articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor });
@@ -1812,15 +1849,20 @@
       function AdminView() {
         const params = new URLSearchParams((location.hash.split('?')[1] || ''));
         const editId = params.get('edit');
-        const [form, setForm] = React.useState({ title: '', driveFileId: '', driveMimeType: '', tagsText: '', status: 'PUBLISHED' });
+        const [articleTypes, setArticleTypes] = React.useState([]);
+        const [form, setForm] = React.useState({ title: '', driveFileId: '', typeId: '', tagsText: '', status: 'PUBLISHED' });
         const editorRef = React.useRef(null);
         const quillRef = React.useRef(null);
         React.useEffect(() => {
+          google.script.run.withSuccessHandler((list) => {
+            setArticleTypes(list || []);
+            window.__ARTICLE_TYPES__ = list || [];
+          }).withFailureHandler((err) => { dbg('admin:types:error', err && (err.message || err)); }).listArticleTypes();
           quillRef.current = new Quill(editorRef.current, { theme: 'snow', modules: { toolbar: [['bold','italic','underline'],[{ 'list': 'ordered' }, { 'list': 'bullet' }], ['link'], [{ 'header': [2,3,false] }]] } });
           if (editId) {
             google.script.run.withSuccessHandler((a) => {
               if (a) {
-                setForm({ title: a.title, driveFileId: a.driveFileId, driveMimeType: a.driveMimeType, tagsText: (a.tags || []).map(t => t.name || t.slug).join(', '), status: a.status || 'PUBLISHED' });
+                setForm({ title: a.title, driveFileId: a.driveFileId, typeId: a.typeId || '', tagsText: (a.tags || []).map(t => t.name || t.slug).join(', '), status: a.status || 'PUBLISHED' });
                 quillRef.current.root.innerHTML = a.descriptionHtmlSanitized || '';
               }
             }).withFailureHandler((err) => { dbg('admin:readArticle:error', err && (err.message || err)); showToast('Error al cargar el artículo: ' + (err && err.message || err), 'error'); }).readArticleByArticleId(editId);
@@ -1834,7 +1876,7 @@
             title: form.title,
             descriptionHtml: quillRef.current.root.innerHTML,
             driveFileId: form.driveFileId,
-            driveMimeType: form.driveMimeType,
+            typeId: form.typeId || '',
             tagsText: form.tagsText || '',
             status: form.status
           };
@@ -1875,7 +1917,10 @@
               e('label', { style: { display: 'block', fontWeight: 600, marginBottom: '6px', color: 'var(--c-primary-dark)' } }, 
                 e('span', { className: 'material-symbols-outlined icon', style: { fontSize: '18px' } }, 'category'), 'Categoría'
               ),
-              e('input', { className: 'search', placeholder: 'Ej: protocolo, tamizaje, etc.', value: form.driveMimeType, onChange: ev => setForm({ ...form, driveMimeType: ev.target.value }), style: { width: '100%', maxWidth: 'none' } })
+              e('select', { className: 'search', value: form.typeId, onChange: ev => setForm({ ...form, typeId: ev.target.value }), style: { width: '100%', maxWidth: 'none' }, 'aria-label': 'Categoría del artículo' },
+                e('option', { value: '' }, 'Sin categoría'),
+                articleTypes.map(t => e('option', { key: t.typeId, value: t.typeId || '' }, t.name || t.slug || ''))
+              )
             ),
             e('div', { style: { marginBottom: '16px' } },
               e('label', { style: { display: 'block', fontWeight: 600, marginBottom: '6px', color: 'var(--c-primary-dark)' } }, 
@@ -1903,6 +1948,197 @@
               e('button', { className: 'btn', onClick: () => navigate('#/') }, e('span', { className: 'material-symbols-outlined icon' }, 'arrow_back'), 'Volver'),
               editId && e('button', { className: 'btn warn', onClick: onDelete }, e('span', { className: 'material-symbols-outlined icon' }, 'delete'), 'Eliminar')
             )
+          )
+        );
+      }
+
+      function AdminTypes() {
+        const [rows, setRows] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
+        const [syncing, setSyncing] = React.useState(false);
+        const [newRow, setNewRow] = React.useState({ name: '', color: '#94a3b8', order: '99' });
+        const [busyId, setBusyId] = React.useState('');
+
+        function loadTypes() {
+          setLoading(true);
+          google.script.run
+            .withSuccessHandler(function(list) {
+              var mapped = (list || []).map(function(t) {
+                return {
+                  typeId: t.typeId,
+                  name: t.name || '',
+                  color: t.color || '#94a3b8',
+                  order: String(t.order != null ? t.order : 99)
+                };
+              });
+              setRows(mapped);
+              window.__ARTICLE_TYPES__ = list || [];
+              setLoading(false);
+            })
+            .withFailureHandler(function(err) {
+              showToast('Error al cargar categorías: ' + (err && err.message || err), 'error');
+              setLoading(false);
+            })
+            .listArticleTypes();
+        }
+
+        React.useEffect(function() { loadTypes(); }, []);
+
+        function patchRow(i, field, val) {
+          setRows(function(prev) {
+            return prev.map(function(r, j) {
+              if (j !== i) return r;
+              var o = Object.assign({}, r);
+              o[field] = val;
+              return o;
+            });
+          });
+        }
+
+        function saveRow(i) {
+          var r = rows[i];
+          if (!r || !r.typeId) return;
+          setBusyId(r.typeId);
+          google.script.run
+            .withSuccessHandler(function() {
+              showToast('Categoría actualizada', 'success');
+              setBusyId('');
+              loadTypes();
+            })
+            .withFailureHandler(function(err) {
+              showToast(err && err.message || String(err), 'error');
+              setBusyId('');
+            })
+            .updateArticleType({
+              typeId: r.typeId,
+              name: (r.name || '').trim(),
+              color: r.color || '#94a3b8',
+              order: parseInt(r.order, 10) || 99
+            });
+        }
+
+        function deleteRow(i) {
+          var r = rows[i];
+          if (!r || !r.typeId) return;
+          showConfirm('Eliminar categoría', '¿Eliminar "' + (r.name || '') + '"? Solo es posible si no hay artículos con esta categoría.', function() {
+            setBusyId(r.typeId);
+            google.script.run
+              .withSuccessHandler(function() {
+                showToast('Categoría eliminada', 'success');
+                setBusyId('');
+                loadTypes();
+              })
+              .withFailureHandler(function(err) {
+                showToast(err && err.message || String(err), 'error');
+                setBusyId('');
+              })
+              .deleteArticleType({ typeId: r.typeId });
+          });
+        }
+
+        function createRow() {
+          var nm = (newRow.name || '').trim();
+          if (!nm) { showToast('Indica un nombre', 'warning'); return; }
+          google.script.run
+            .withSuccessHandler(function() {
+              showToast('Categoría creada', 'success');
+              setNewRow({ name: '', color: '#94a3b8', order: '99' });
+              loadTypes();
+            })
+            .withFailureHandler(function(err) {
+              showToast(err && err.message || String(err), 'error');
+            })
+            .createArticleType({
+              name: nm,
+              color: newRow.color || '#94a3b8',
+              order: parseInt(newRow.order, 10) || 99
+            });
+        }
+
+        function syncDrive() {
+          showConfirm(
+            'Sincronizar con Drive',
+            'Se crearán o confirmarán categorías en la hoja según la jerarquía de carpetas de la carpeta raíz del script. ¿Continuar?',
+            function() {
+              setSyncing(true);
+              google.script.run
+                .withSuccessHandler(function() {
+                  showToast('Categorías sincronizadas con Drive', 'success');
+                  setSyncing(false);
+                  loadTypes();
+                })
+                .withFailureHandler(function(err) {
+                  showToast(err && err.message || String(err), 'error');
+                  setSyncing(false);
+                })
+                .ensureArticleTypesFromDriveFolder();
+            }
+          );
+        }
+
+        return e('div', { className: 'p-4', style: { maxWidth: 960, margin: '0 auto' } },
+          e('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-6' },
+            e('h1', { style: { margin: 0, color: 'var(--c-primary-dark)', fontSize: '1.5rem' } }, 'Categorías (tipos de artículo)'),
+            e('div', { className: 'flex flex-wrap gap-2' },
+              e('button', { className: 'btn ghost', disabled: syncing, onClick: syncDrive }, e('span', { className: 'material-symbols-outlined icon' }, 'cloud_sync'), syncing ? 'Sincronizando…' : 'Desde carpetas Drive'),
+              e('button', { className: 'btn', onClick: function() { navigate('#/'); } }, e('span', { className: 'material-symbols-outlined icon' }, 'arrow_back'), 'Biblioteca')
+            )
+          ),
+          e('div', { className: 'card', style: { marginBottom: 16 } },
+            e('h2', { style: { marginTop: 0, color: 'var(--c-primary-dark)', fontSize: '1.1rem' } }, 'Nueva categoría'),
+            e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' } },
+              e('div', { style: { flex: '1 1 200px' } },
+                e('label', { style: { display: 'block', fontWeight: 600, marginBottom: 4, fontSize: 13 } }, 'Nombre'),
+                e('input', { className: 'search', style: { width: '100%', maxWidth: 'none' }, value: newRow.name, onChange: function(ev) { setNewRow(Object.assign({}, newRow, { name: ev.target.value })); }, placeholder: 'Ej. Protocolo' })
+              ),
+              e('div', { style: { flex: '0 0 120px' } },
+                e('label', { style: { display: 'block', fontWeight: 600, marginBottom: 4, fontSize: 13 } }, 'Color'),
+                e('input', { type: 'color', className: 'search', style: { width: '100%', height: 40, padding: 4 }, value: newRow.color, onChange: function(ev) { setNewRow(Object.assign({}, newRow, { color: ev.target.value })); } })
+              ),
+              e('div', { style: { flex: '0 0 80px' } },
+                e('label', { style: { display: 'block', fontWeight: 600, marginBottom: 4, fontSize: 13 } }, 'Orden'),
+                e('input', { className: 'search', style: { width: '100%' }, value: newRow.order, onChange: function(ev) { setNewRow(Object.assign({}, newRow, { order: ev.target.value })); } })
+              ),
+              e('button', { className: 'btn primary', onClick: createRow }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Añadir')
+            )
+          ),
+          e('div', { className: 'card' },
+            e('h2', { style: { marginTop: 0, color: 'var(--c-primary-dark)', fontSize: '1.1rem' } }, 'Listado'),
+            loading
+              ? e('div', { className: 'muted', style: { padding: 24, textAlign: 'center' } }, 'Cargando…')
+              : e('div', { style: { overflow: 'auto' } },
+                  e('table', { className: 'min-w-full' },
+                    e('thead', null,
+                      e('tr', null,
+                        e('th', null, 'Nombre'),
+                        e('th', null, 'Color'),
+                        e('th', null, 'Orden'),
+                        e('th', null, '')
+                      )
+                    ),
+                    e('tbody', null,
+                      rows.map(function(r, i) {
+                        return e('tr', { key: r.typeId || String(i) },
+                          e('td', null,
+                            e('input', { className: 'search', style: { width: '100%', maxWidth: 280 }, value: r.name, disabled: busyId === r.typeId, onChange: function(ev) { patchRow(i, 'name', ev.target.value); } })
+                          ),
+                          e('td', null,
+                            e('input', { type: 'color', className: 'search', style: { width: 56, height: 36, padding: 2 }, value: r.color, disabled: busyId === r.typeId, onChange: function(ev) { patchRow(i, 'color', ev.target.value); } })
+                          ),
+                          e('td', null,
+                            e('input', { className: 'search', style: { width: 72 }, value: r.order, disabled: busyId === r.typeId, onChange: function(ev) { patchRow(i, 'order', ev.target.value); } })
+                          ),
+                          e('td', null,
+                            e('div', { className: 'actions', style: { flexWrap: 'nowrap' } },
+                              e('button', { className: 'btn primary', disabled: busyId === r.typeId, onClick: function() { saveRow(i); } }, 'Guardar'),
+                              e('button', { className: 'btn warn', disabled: busyId === r.typeId, onClick: function() { deleteRow(i); } }, 'Eliminar')
+                            )
+                          )
+                        );
+                      })
+                    )
+                  )
+                )
           )
         );
       }

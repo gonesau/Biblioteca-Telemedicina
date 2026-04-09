@@ -242,12 +242,10 @@ function createArticle(payload) {
     var title = (payload.title || '').toString().trim();
     var description = sanitizeHtml_((payload.descriptionHtml || '').toString());
     var driveFileId = extractDriveFileIdFromAny_((payload.driveFileId || '').toString().trim());
-    var driveMimeType = (payload.driveMimeType || '').toString().trim();
-    var typeId = (payload.typeId || '').toString().trim();
     var status = (payload.status || 'PUBLISHED').toString().trim();
-    if (!typeId && driveMimeType) {
-      try { typeId = getOrCreateTypeIdByName_(driveMimeType); } catch (_) {}
-    }
+    var resolved = resolveNewArticleType_(payload);
+    var typeId = resolved.typeId;
+    var driveMimeType = resolved.driveMimeType;
     if (!title) throw new Error('Título requerido');
 
     var slug = ensureUniqueSlug_(slugify_(title));
@@ -322,13 +320,10 @@ function updateArticle(payload) {
     var title = (payload.title != null ? payload.title : before.title).toString().trim();
     var description = (payload.descriptionHtml != null ? sanitizeHtml_(payload.descriptionHtml) : before.descriptionHtmlSanitized);
     var driveFileId = (payload.driveFileId != null ? extractDriveFileIdFromAny_(payload.driveFileId) : before.driveFileId).toString().trim();
-    var driveMimeType = (payload.driveMimeType != null ? payload.driveMimeType : before.driveMimeType).toString().trim();
-    var typeId = (payload.typeId != null ? payload.typeId : before.typeId).toString().trim();
     var status = (payload.status != null ? payload.status : (before.status || 'PUBLISHED')).toString().trim();
-    // si cambiaron la categoría (driveMimeType) recalcular/asegurar typeId
-    if ((payload.driveMimeType != null) && driveMimeType) {
-      try { typeId = getOrCreateTypeIdByName_(driveMimeType); } catch (_) {}
-    }
+    var resolvedType = resolveUpdateArticleType_(payload, before);
+    var typeId = resolvedType.typeId;
+    var driveMimeType = resolvedType.driveMimeType;
 
     row[map['title']] = title;
     // Slug inmutable por defecto; si el título cambió, mantenemos slug.
@@ -606,6 +601,48 @@ function upsertArticleTagsForArticle_(articleId, tagsInput) {
   }
 }
 
+/** Categoría al crear: prioriza typeId del payload; si no, texto driveMimeType (getOrCreate). */
+function resolveNewArticleType_(payload) {
+  var typesMap = buildArticleTypesMap_();
+  if (payload && payload.typeId !== undefined && payload.typeId !== null) {
+    var tid = (payload.typeId || '').toString().trim();
+    if (!tid) return { typeId: '', driveMimeType: '' };
+    var t = typesMap[tid];
+    if (!t) throw new Error('Categoría no válida');
+    return { typeId: tid, driveMimeType: (t.name || '').toString() };
+  }
+  var driveMimeType = ((payload && payload.driveMimeType) || '').toString().trim();
+  var typeId = '';
+  if (driveMimeType) {
+    try { typeId = getOrCreateTypeIdByName_(driveMimeType); } catch (_) {}
+  }
+  return { typeId: typeId, driveMimeType: driveMimeType };
+}
+
+/** Categoría al actualizar: prioriza typeId si viene en el payload; si no, driveMimeType (getOrCreate); si no, conserva antes. */
+function resolveUpdateArticleType_(payload, before) {
+  var typesMap = buildArticleTypesMap_();
+  if (payload && payload.typeId !== undefined && payload.typeId !== null) {
+    var tid = (payload.typeId || '').toString().trim();
+    if (!tid) return { typeId: '', driveMimeType: '' };
+    var t = typesMap[tid];
+    if (!t) throw new Error('Categoría no válida');
+    return { typeId: tid, driveMimeType: (t.name || '').toString() };
+  }
+  if (payload && payload.driveMimeType !== undefined && payload.driveMimeType !== null) {
+    var label = (payload.driveMimeType || '').toString().trim();
+    if (!label) return { typeId: '', driveMimeType: '' };
+    try {
+      var id = getOrCreateTypeIdByName_(label);
+      return { typeId: id, driveMimeType: label };
+    } catch (_) {}
+  }
+  return {
+    typeId: (before.typeId || '').toString().trim(),
+    driveMimeType: (before.driveMimeType || '').toString().trim()
+  };
+}
+
 // Asegura y retorna un typeId para un nombre de tipo (case-insensitive). Crea el tipo si no existe.
 function getOrCreateTypeIdByName_(name) {
   var typeName = (name || '').toString().trim();
@@ -652,6 +689,103 @@ function listArticleTypes() {
     out.sort(function(a,b){ var ao = parseInt(a.order,10)||0; var bo = parseInt(b.order,10)||0; if (ao!==bo) return ao-bo; return (a.name||'').localeCompare(b.name||''); });
     return out;
   }, { entityType: 'type', entityId: '' });
+}
+
+function createArticleType(payload) {
+  return tryWithAudit_(function() {
+    assertAccessOrThrow_(true);
+    var name = ((payload && payload.name) || '').toString().trim();
+    if (!name) throw new Error('Nombre de categoría requerido');
+    var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
+    if (!sheet) throw new Error('Hoja ArticleTypes no encontrada');
+    var hdr = SHEET_HEADERS.ARTICLE_TYPES;
+    var map = getHeaderIndexMap_(sheet, hdr);
+    var rows = getRows_(sheet);
+    var lower = name.toLowerCase();
+    for (var i = 0; i < rows.length; i++) {
+      var nm = (rows[i][map['name']] || '').toString().trim().toLowerCase();
+      if (nm === lower) throw new Error('Ya existe una categoría con ese nombre');
+    }
+    var id = uuid_();
+    var slug = slugify_(name);
+    var color = ((payload && payload.color) || '#94a3b8').toString().trim();
+    var orderVal = parseInt((payload && payload.order), 10);
+    if (isNaN(orderVal)) orderVal = 99;
+    var row = [];
+    row[map['typeId']] = id;
+    row[map['name']] = name;
+    row[map['slug']] = slug;
+    row[map['color']] = color;
+    row[map['order']] = orderVal;
+    sheet.appendRow(row);
+    invalidateArticlesCache_();
+    logAudit_('type', id, 'CREATE', getActiveUserEmail_(), { name: name });
+    return { typeId: id, name: name, slug: slug, color: color, order: orderVal };
+  }, { entityType: 'type', entityId: '' });
+}
+
+function updateArticleType(payload) {
+  return tryWithAudit_(function() {
+    assertAccessOrThrow_(true);
+    var typeId = ((payload && payload.typeId) || '').toString().trim();
+    if (!typeId) throw new Error('typeId requerido');
+    var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
+    if (!sheet) throw new Error('Hoja ArticleTypes no encontrada');
+    var hdr = SHEET_HEADERS.ARTICLE_TYPES;
+    var map = getHeaderIndexMap_(sheet, hdr);
+    var rowIndex = findRowIndexByKey_(sheet, 'typeId', typeId, map);
+    if (rowIndex < 0) throw new Error('Categoría no encontrada');
+    var row = sheet.getRange(rowIndex, 1, 1, hdr.length).getValues()[0];
+    var newName = payload.name != null ? (payload.name || '').toString().trim() : (row[map['name']] || '').toString();
+    if (!newName) throw new Error('Nombre requerido');
+    if (payload.name != null) {
+      var rows = getRows_(sheet);
+      var lower = newName.toLowerCase();
+      for (var j = 0; j < rows.length; j++) {
+        var otherId = rows[j][map['typeId']];
+        if ((otherId || '').toString() === typeId) continue;
+        var nm = (rows[j][map['name']] || '').toString().trim().toLowerCase();
+        if (nm === lower) throw new Error('Ya existe una categoría con ese nombre');
+      }
+      row[map['name']] = newName;
+      row[map['slug']] = slugify_(newName);
+    }
+    if (payload.color != null) row[map['color']] = (payload.color || '').toString().trim();
+    if (payload.order !== undefined && payload.order !== null) {
+      var o = parseInt(payload.order, 10);
+      if (!isNaN(o)) row[map['order']] = o;
+    }
+    sheet.getRange(rowIndex, 1, 1, hdr.length).setValues([row]);
+    invalidateArticlesCache_();
+    logAudit_('type', typeId, 'UPDATE', getActiveUserEmail_(), { name: newName });
+    return { typeId: typeId, name: row[map['name']], slug: row[map['slug']], color: row[map['color']], order: row[map['order']] };
+  }, { entityType: 'type', entityId: (payload && payload.typeId) || '' });
+}
+
+function deleteArticleType(payload) {
+  return tryWithAudit_(function() {
+    assertAccessOrThrow_(true);
+    var typeId = ((payload && payload.typeId) || '').toString().trim();
+    if (!typeId) throw new Error('typeId requerido');
+    var articlesSheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
+    var aHdr = SHEET_HEADERS.ARTICLES;
+    var aMap = getHeaderIndexMap_(articlesSheet, aHdr);
+    var aRows = getRows_(articlesSheet);
+    var n = 0;
+    for (var i = 0; i < aRows.length; i++) {
+      if ((aRows[i][aMap['typeId']] || '').toString() === typeId) n++;
+    }
+    if (n > 0) throw new Error('No se puede eliminar: hay ' + n + ' artículo(s) con esta categoría');
+    var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLE_TYPES);
+    var hdr = SHEET_HEADERS.ARTICLE_TYPES;
+    var map = getHeaderIndexMap_(sheet, hdr);
+    var rowIndex = findRowIndexByKey_(sheet, 'typeId', typeId, map);
+    if (rowIndex < 0) throw new Error('Categoría no encontrada');
+    sheet.deleteRow(rowIndex);
+    invalidateArticlesCache_();
+    logAudit_('type', typeId, 'DELETE', getActiveUserEmail_(), {});
+    return { ok: true };
+  }, { entityType: 'type', entityId: (payload && payload.typeId) || '' });
 }
 
 function listTags() {

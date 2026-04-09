@@ -236,6 +236,41 @@ function _buildFileDescription_(file, typeName) {
 }
 
 /** Devuelve un objeto { fileId: true } de todos los driveFileId ya registrados. */
+// ----------------------------------------------------------------
+// Asegura filas en ArticleTypes para cada carpeta (sin importar archivos)
+// ----------------------------------------------------------------
+function _ensureTypesInFolderTree_(folder, parentTypeName) {
+  var folderName = folder.getName();
+  var typeName = _resolveTypeName_(folderName, parentTypeName);
+  if (typeName) {
+    try {
+      getOrCreateTypeIdByName_(typeName);
+    } catch (e) {
+      logAudit_('import', folder.getId(), 'TYPE_ENSURE_ERROR', getActiveUserEmail_(), { message: e && e.message, typeName: typeName });
+    }
+  }
+  var subFolders = folder.getFolders();
+  while (subFolders.hasNext()) {
+    var sub = subFolders.next();
+    _ensureTypesInFolderTree_(sub, typeName);
+  }
+}
+
+function ensureArticleTypesFromDriveFolder(folderId) {
+  assertAccessOrThrow_(true);
+  var id = folderId || DEFAULT_FOLDER_ID;
+  try {
+    var folder = DriveApp.getFolderById(id);
+    _ensureTypesInFolderTree_(folder, null);
+  } catch (e) {
+    logAudit_('import', id, 'ERROR', getActiveUserEmail_(), { message: e.message, phase: 'ensureTypes' });
+    throw new Error('Error recorriendo carpetas: ' + e.message);
+  }
+  logAudit_('import', id, 'ENSURE_TYPES_COMPLETE', getActiveUserEmail_(), {});
+  invalidateArticlesCache_();
+  return { ok: true };
+}
+
 function _getExistingFileIds_() {
   var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
   var hdrs  = SHEET_HEADERS.ARTICLES;
@@ -278,5 +313,22 @@ function menu_syncDriveFolder_() {
     ui.alert('Sincronización completada ✓\n\nNuevos: ' + stats.created + '\nYa existentes: ' + stats.skipped + '\nErrores: ' + stats.errors);
   } catch (e) {
     ui.alert('Error durante la sincronización:\n' + e.message);
+  }
+}
+
+function menu_ensureArticleTypesFromDrive_() {
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.prompt(
+    'Categorías desde carpetas',
+    'ID de carpeta raíz en Drive (vacío = carpeta por defecto de Telemedicina):',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  var inputId = result.getResponseText().trim() || DEFAULT_FOLDER_ID;
+  try {
+    ensureArticleTypesFromDriveFolder(inputId);
+    ui.alert('Listo: se crearon o confirmaron categorías en ArticleTypes según la jerarquía de carpetas.');
+  } catch (e) {
+    ui.alert('Error:\n' + e.message);
   }
 }
