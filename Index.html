@@ -631,6 +631,25 @@
           })
           .listArticleTypes();
       }
+      function normArticleIdForEdit_(v) {
+        return String(v == null ? '' : v).trim();
+      }
+      function applyEditModalArticlePayload_(full, loadToken) {
+        if (!window.__CURRENT_EDIT__ || normArticleIdForEdit_(window.__CURRENT_EDIT__.articleId) !== loadToken) return false;
+        if (full != null && typeof full === 'object' && !Array.isArray(full)) {
+          Object.assign(window.__CURRENT_EDIT__, full);
+          window.__editQuill.root.innerHTML = full.descriptionHtmlSanitized || '';
+          var ts = document.getElementById('edit-type-select');
+          if (ts) ts.value = (full.typeId || '').toString();
+          return true;
+        }
+        return false;
+      }
+      function finishEditModalLoad_(statusEl, saveBtnEarly) {
+        statusEl.textContent = '';
+        statusEl.style.color = '';
+        if (saveBtnEarly) saveBtnEarly.disabled = false;
+      }
       function openEditModal(article) {
         try {
           const modal = document.getElementById('edit-modal');
@@ -647,8 +666,10 @@
           // Si solo se pasa ID, intentar buscarlo desde last articles fetch
           let a = article;
           if (!a || !a.title) {
-            // buscar en tabla cargada
-            try { a = (window.__LAST_ARTICLES__ || []).find(x => x.articleId === article); } catch (_) {}
+            try {
+              var want = normArticleIdForEdit_(article);
+              a = (window.__LAST_ARTICLES__ || []).find(function(x) { return normArticleIdForEdit_(x.articleId) === want; });
+            } catch (_) {}
           }
           if (!a) return;
           // guardar ref actual
@@ -657,36 +678,62 @@
           fileIdEl.value = a.driveFileId || '';
           fillArticleTypeSelect(typeSel, a.typeId || '');
           const saveBtnEarly = document.getElementById('edit-save-btn');
-          const loadDescForId = a.articleId;
+          const loadToken = normArticleIdForEdit_(a.articleId);
+          const slugFallback = (a.slug || '').toString().trim();
           window.__editQuill.root.innerHTML = '<p><br></p>';
           if (saveBtnEarly) saveBtnEarly.disabled = true;
           statusEl.textContent = 'Cargando descripción...';
           statusEl.style.color = 'var(--c-primary)';
+          function trySlugThenFinish_(prevErrMsg) {
+            if (!slugFallback) {
+              if (prevErrMsg) try { showToast('Error al cargar la descripción: ' + prevErrMsg, 'error'); } catch (_) {}
+              else try { showToast('No se pudo cargar la descripción completa.', 'error'); } catch (_) {}
+              finishEditModalLoad_(statusEl, saveBtnEarly);
+              return;
+            }
+            google.script.run
+              .withSuccessHandler(function (bySlug) {
+                if (applyEditModalArticlePayload_(bySlug, loadToken)) {
+                  finishEditModalLoad_(statusEl, saveBtnEarly);
+                  return;
+                }
+                if (!window.__CURRENT_EDIT__ || normArticleIdForEdit_(window.__CURRENT_EDIT__.articleId) !== loadToken) {
+                  finishEditModalLoad_(statusEl, saveBtnEarly);
+                  return;
+                }
+                if (prevErrMsg) try { showToast('Error al cargar la descripción: ' + prevErrMsg, 'error'); } catch (_) {}
+                else try { showToast('No se pudo cargar la descripción completa.', 'error'); } catch (_) {}
+                finishEditModalLoad_(statusEl, saveBtnEarly);
+              })
+              .withFailureHandler(function (err2) {
+                var m = prevErrMsg || (err2 && (err2.message || err2));
+                if (window.__CURRENT_EDIT__ && normArticleIdForEdit_(window.__CURRENT_EDIT__.articleId) === loadToken) {
+                  try { showToast('Error al cargar la descripción: ' + m, 'error'); } catch (_) {}
+                }
+                finishEditModalLoad_(statusEl, saveBtnEarly);
+              })
+              .readArticleBySlug(slugFallback);
+          }
           google.script.run
             .withSuccessHandler(function (full) {
-              if (!window.__CURRENT_EDIT__ || window.__CURRENT_EDIT__.articleId !== loadDescForId) return;
-              if (full && typeof full === 'object') {
-                Object.assign(window.__CURRENT_EDIT__, full);
-                window.__editQuill.root.innerHTML = full.descriptionHtmlSanitized || '';
-                var ts = document.getElementById('edit-type-select');
-                if (ts) ts.value = (full.typeId || '').toString();
-              } else {
-                window.__editQuill.root.innerHTML = a.descriptionHtmlSanitized || '';
-                try { showToast('No se pudo cargar la descripción completa.', 'error'); } catch (_) {}
+              if (!window.__CURRENT_EDIT__ || normArticleIdForEdit_(window.__CURRENT_EDIT__.articleId) !== loadToken) {
+                finishEditModalLoad_(statusEl, saveBtnEarly);
+                return;
               }
-              statusEl.textContent = '';
-              statusEl.style.color = '';
-              if (saveBtnEarly) saveBtnEarly.disabled = false;
+              if (applyEditModalArticlePayload_(full, loadToken)) {
+                finishEditModalLoad_(statusEl, saveBtnEarly);
+                return;
+              }
+              trySlugThenFinish_(null);
             })
             .withFailureHandler(function (err) {
-              if (!window.__CURRENT_EDIT__ || window.__CURRENT_EDIT__.articleId !== loadDescForId) return;
-              window.__editQuill.root.innerHTML = a.descriptionHtmlSanitized || '';
-              statusEl.textContent = '';
-              statusEl.style.color = '';
-              if (saveBtnEarly) saveBtnEarly.disabled = false;
-              try { showToast('Error al cargar la descripción: ' + (err && err.message || err), 'error'); } catch (_) {}
+              if (!window.__CURRENT_EDIT__ || normArticleIdForEdit_(window.__CURRENT_EDIT__.articleId) !== loadToken) {
+                finishEditModalLoad_(statusEl, saveBtnEarly);
+                return;
+              }
+              trySlugThenFinish_(err && (err.message || String(err)));
             })
-            .readArticleByArticleId(loadDescForId);
+            .readArticleByArticleId(loadToken);
           // asegurar input de tags
           if (!tagsEl) {
             const host = document.getElementById('edit-content');

@@ -1,3 +1,16 @@
+/** Celda de hoja → string estable para devolver al cliente (HTMLService serializa mal algunos tipos de Sheets). */
+function sheetCellToString_(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) {
+    try {
+      return toIsoString_(v);
+    } catch (e) {
+      return String(v);
+    }
+  }
+  return String(v);
+}
+
 function assertAccessOrThrow_(requireAdmin) {
   var email = getActiveUserEmail_();
   var cfg = getAccessConfig();
@@ -102,11 +115,13 @@ function readArticles() {
       if (!canSeeReview && status === 'NEEDS_REVIEW') continue;
 
       var typeObj = typesMap[r[map['typeId']]] || null;
+      var aidRaw = r[map['articleId']];
+      var aid = (aidRaw || '').toString().trim();
       var descHtml = r[map['descriptionHtmlSanitized']] || '';
       var descPlain = descHtml.replace(/<[^>]+>/g, '').trim();
       var descShort = descPlain.length > 200 ? descPlain.substring(0, 200) + '...' : descPlain;
       list.push({
-        articleId: r[map['articleId']],
+        articleId: aid,
         title: r[map['title']],
         slug: r[map['slug']],
         typeId: r[map['typeId']],
@@ -120,7 +135,7 @@ function readArticles() {
         createdBy: r[map['createdBy']],
         updatedBy: r[map['updatedBy']],
         status: status,
-        tags: tagsByArticle[r[map['articleId']]] || []
+        tags: tagsByArticle[aid] || tagsByArticle[aidRaw] || []
       });
     }
     setCachedJSON_(cacheKey, list, CACHE_TTL_SECONDS);
@@ -136,7 +151,7 @@ function readArticleBySlug(slug) {
     var slugCacheKey = normSlug.toLowerCase();
     var detailKey = getArticleDetailCacheKeyBySlug_(slugCacheKey, canSeeReview);
     var fromCache = getCachedJSON_(detailKey);
-    if (fromCache) return fromCache;
+    if (fromCache && typeof fromCache === 'object' && !Array.isArray(fromCache)) return fromCache;
 
     var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
     var hdrs = SHEET_HEADERS.ARTICLES;
@@ -152,23 +167,25 @@ function readArticleBySlug(slug) {
         if (!canSeeReview && status === 'NEEDS_REVIEW') return null;
 
         var typeObj = typesMap[r[map['typeId']]] || null;
-        var aid = r[map['articleId']];
+        var aidRaw = r[map['articleId']];
+        var aid = (aidRaw || '').toString().trim();
+        var tags = tagsByArticle[aid] || tagsByArticle[aidRaw] || [];
         var out = {
           articleId: aid,
-          title: r[map['title']],
-          slug: r[map['slug']],
-          typeId: r[map['typeId']],
-          typeName: typeObj ? typeObj.name : '',
-          typeColor: typeObj ? typeObj.color : '',
-          descriptionHtmlSanitized: r[map['descriptionHtmlSanitized']],
-          driveFileId: r[map['driveFileId']],
-          driveMimeType: r[map['driveMimeType']],
-          createdAt: r[map['createdAt']],
-          updatedAt: r[map['updatedAt']],
-          createdBy: r[map['createdBy']],
-          updatedBy: r[map['updatedBy']],
-          status: status,
-          tags: tagsByArticle[aid] || []
+          title: sheetCellToString_(r[map['title']]),
+          slug: sheetCellToString_(r[map['slug']]),
+          typeId: sheetCellToString_(r[map['typeId']]),
+          typeName: typeObj ? sheetCellToString_(typeObj.name) : '',
+          typeColor: typeObj ? sheetCellToString_(typeObj.color) : '',
+          descriptionHtmlSanitized: sheetCellToString_(r[map['descriptionHtmlSanitized']]),
+          driveFileId: sheetCellToString_(r[map['driveFileId']]),
+          driveMimeType: sheetCellToString_(r[map['driveMimeType']]),
+          createdAt: sheetCellToString_(r[map['createdAt']]),
+          updatedAt: sheetCellToString_(r[map['updatedAt']]),
+          createdBy: sheetCellToString_(r[map['createdBy']]),
+          updatedBy: sheetCellToString_(r[map['updatedBy']]),
+          status: sheetCellToString_(status),
+          tags: tags
         };
         setCachedJSON_(detailKey, out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
         setCachedJSON_(getArticleDetailCacheKeyByArticleId_(aid, canSeeReview), out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
@@ -187,10 +204,11 @@ function readArticleByArticleId(articleId) {
   return tryWithAudit_(function() {
     var auth = assertAccessOrThrow_(false);
     var canSeeReview = auth.isAdmin || auth.isGuestEditor;
-    var wantId = (articleId || '').toString();
+    var wantId = (articleId || '').toString().trim();
+    if (!wantId) return null;
     var detailKey = getArticleDetailCacheKeyByArticleId_(wantId, canSeeReview);
     var fromCache = getCachedJSON_(detailKey);
-    if (fromCache) return fromCache;
+    if (fromCache && typeof fromCache === 'object' && !Array.isArray(fromCache)) return fromCache;
 
     var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
     var hdrs = SHEET_HEADERS.ARTICLES;
@@ -200,28 +218,30 @@ function readArticleByArticleId(articleId) {
     var tagsByArticle = buildTagsByArticleIdMap_();
     var idIdx = map['articleId'];
     for (var i = 0; i < rows.length; i++) {
-      if ((rows[i][idIdx] || '').toString() === wantId) {
+      var rowId = (rows[i][idIdx] || '').toString().trim();
+      if (rowId === wantId) {
         var r = rows[i];
         var status = r[map['status']] || 'PUBLISHED';
         if (!canSeeReview && status === 'NEEDS_REVIEW') return null;
         var typeObj = typesMap[r[map['typeId']]] || null;
-        var aid = r[map['articleId']];
+        var aid = rowId;
+        var tags = tagsByArticle[aid] || tagsByArticle[r[map['articleId']]] || [];
         var out = {
           articleId: aid,
-          title: r[map['title']],
-          slug: r[map['slug']],
-          typeId: r[map['typeId']],
-          typeName: typeObj ? typeObj.name : '',
-          typeColor: typeObj ? typeObj.color : '',
-          descriptionHtmlSanitized: r[map['descriptionHtmlSanitized']],
-          driveFileId: r[map['driveFileId']],
-          driveMimeType: r[map['driveMimeType']],
-          createdAt: r[map['createdAt']],
-          updatedAt: r[map['updatedAt']],
-          createdBy: r[map['createdBy']],
-          updatedBy: r[map['updatedBy']],
-          status: status,
-          tags: tagsByArticle[aid] || []
+          title: sheetCellToString_(r[map['title']]),
+          slug: sheetCellToString_(r[map['slug']]),
+          typeId: sheetCellToString_(r[map['typeId']]),
+          typeName: typeObj ? sheetCellToString_(typeObj.name) : '',
+          typeColor: typeObj ? sheetCellToString_(typeObj.color) : '',
+          descriptionHtmlSanitized: sheetCellToString_(r[map['descriptionHtmlSanitized']]),
+          driveFileId: sheetCellToString_(r[map['driveFileId']]),
+          driveMimeType: sheetCellToString_(r[map['driveMimeType']]),
+          createdAt: sheetCellToString_(r[map['createdAt']]),
+          updatedAt: sheetCellToString_(r[map['updatedAt']]),
+          createdBy: sheetCellToString_(r[map['createdBy']]),
+          updatedBy: sheetCellToString_(r[map['updatedBy']]),
+          status: sheetCellToString_(status),
+          tags: tags
         };
         setCachedJSON_(detailKey, out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
         setCachedJSON_(getArticleDetailCacheKeyBySlug_(normalizeSlugParam_(out.slug).toLowerCase(), canSeeReview), out, CACHE_TTL_ARTICLE_DETAIL_SECONDS);
