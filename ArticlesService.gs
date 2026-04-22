@@ -92,54 +92,93 @@ function slugEquals_(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
+function logReadArticlesDiag_(payload) {
+  try {
+    Logger.log('[readArticles] ' + JSON.stringify(payload || {}));
+  } catch (_) {}
+}
+
+function buildArticlesListForRead_(canSeeReview) {
+  var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
+  var hdrs = SHEET_HEADERS.ARTICLES;
+  var map = getHeaderIndexMap_(sheet, hdrs);
+  var rows = getRows_(sheet);
+  var typesMap = buildArticleTypesMap_();
+  var tagsByArticle = buildTagsByArticleIdMap_();
+  var list = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var status = r[map['status']] || 'PUBLISHED';
+    if (!canSeeReview && status === 'NEEDS_REVIEW') continue;
+
+    var typeObj = typesMap[r[map['typeId']]] || null;
+    var aidRaw = r[map['articleId']];
+    var aid = (aidRaw || '').toString().trim();
+    var descHtml = r[map['descriptionHtmlSanitized']] || '';
+    var descPlain = descHtml.replace(/<[^>]+>/g, '').trim();
+    var descShort = descPlain.length > 200 ? descPlain.substring(0, 200) + '...' : descPlain;
+    list.push({
+      articleId: aid,
+      title: r[map['title']],
+      slug: r[map['slug']],
+      typeId: r[map['typeId']],
+      typeName: typeObj ? typeObj.name : '',
+      typeColor: typeObj ? typeObj.color : '',
+      descriptionShort: descShort,
+      driveFileId: r[map['driveFileId']],
+      driveMimeType: r[map['driveMimeType']],
+      createdAt: r[map['createdAt']],
+      updatedAt: r[map['updatedAt']],
+      createdBy: r[map['createdBy']],
+      updatedBy: r[map['updatedBy']],
+      status: status,
+      tags: tagsByArticle[aid] || tagsByArticle[aidRaw] || []
+    });
+  }
+  return { list: list, rowsCount: rows.length };
+}
+
 function readArticles() {
   return tryWithAudit_(function() {
     var auth = assertAccessOrThrow_(false);
     var canSeeReview = auth.isAdmin || auth.isGuestEditor;
-    
-    // Try cache first
+
     var cacheKey = CACHE_KEY_ARTICLES + (canSeeReview ? '_all' : '_pub');
     var cached = getCachedJSON_(cacheKey);
-    if (cached) return cached;
-    
-    var sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.ARTICLES);
-    var hdrs = SHEET_HEADERS.ARTICLES;
-    var map = getHeaderIndexMap_(sheet, hdrs);
-    var rows = getRows_(sheet);
-    var typesMap = buildArticleTypesMap_();
-    var tagsByArticle = buildTagsByArticleIdMap_();
-    var list = [];
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var status = r[map['status']] || 'PUBLISHED';
-      if (!canSeeReview && status === 'NEEDS_REVIEW') continue;
-
-      var typeObj = typesMap[r[map['typeId']]] || null;
-      var aidRaw = r[map['articleId']];
-      var aid = (aidRaw || '').toString().trim();
-      var descHtml = r[map['descriptionHtmlSanitized']] || '';
-      var descPlain = descHtml.replace(/<[^>]+>/g, '').trim();
-      var descShort = descPlain.length > 200 ? descPlain.substring(0, 200) + '...' : descPlain;
-      list.push({
-        articleId: aid,
-        title: r[map['title']],
-        slug: r[map['slug']],
-        typeId: r[map['typeId']],
-        typeName: typeObj ? typeObj.name : '',
-        typeColor: typeObj ? typeObj.color : '',
-        descriptionShort: descShort,
-        driveFileId: r[map['driveFileId']],
-        driveMimeType: r[map['driveMimeType']],
-        createdAt: r[map['createdAt']],
-        updatedAt: r[map['updatedAt']],
-        createdBy: r[map['createdBy']],
-        updatedBy: r[map['updatedBy']],
-        status: status,
-        tags: tagsByArticle[aid] || tagsByArticle[aidRaw] || []
-      });
+    if (cached && cached.length > 0) {
+      logReadArticlesDiag_({ cacheHit: true, rowsCount: 'cache', resultCount: cached.length });
+      return cached;
     }
-    setCachedJSON_(cacheKey, list, CACHE_TTL_SECONDS);
-    return list;
+
+    var maxAttempts = 3;
+    var lastList = [];
+    var lastRowsCount = 0;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      var built = buildArticlesListForRead_(canSeeReview);
+      lastList = built.list || [];
+      lastRowsCount = built.rowsCount || 0;
+      logReadArticlesDiag_({
+        cacheHit: false,
+        attempt: attempt,
+        rowsCount: lastRowsCount,
+        resultCount: lastList.length
+      });
+
+      if (lastList.length > 0) {
+        setCachedJSON_(cacheKey, lastList, CACHE_TTL_SECONDS);
+        return lastList;
+      }
+
+      if (lastRowsCount === 0) {
+        // Biblioteca realmente vacía: se permite cachear vacío.
+        setCachedJSON_(cacheKey, [], CACHE_TTL_SECONDS);
+        return [];
+      }
+
+      if (attempt < maxAttempts) Utilities.sleep(250 * attempt);
+    }
+
+    throw new Error('Carga intermitente detectada: lectura vacía con filas existentes. Intenta nuevamente.');
   }, { entityType: 'article', entityId: '' });
 }
 

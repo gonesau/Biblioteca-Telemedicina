@@ -1038,10 +1038,27 @@
         }
       }
 
-      function writeArticlesCache(list) {
+      function writeArticlesCache(list, opts) {
         try {
-          localStorage.setItem(ARTICLES_LS_KEY, JSON.stringify({ ts: Date.now(), list: list || [] }));
+          var options = opts || {};
+          var safeList = Array.isArray(list) ? list : [];
+          var allowEmpty = options.allowEmpty === true;
+          if (!safeList.length && !allowEmpty) return;
+          localStorage.setItem(ARTICLES_LS_KEY, JSON.stringify({
+            ts: Date.now(),
+            count: safeList.length,
+            source: options.source || 'network',
+            list: safeList
+          }));
         } catch (_) {}
+      }
+
+      function isValidArticlesPayload(list) {
+        return Array.isArray(list) && list.length > 0;
+      }
+
+      function shouldTreatEmptyAsTransient(list) {
+        return Array.isArray(list) && list.length === 0;
       }
 
       function normalizeArticleSlugFromHash(raw) {
@@ -1193,13 +1210,46 @@
         });
         const [loadError, setLoadError] = React.useState(null);
         const [retryCount, setRetryCount] = React.useState(0);
+        const [recoveryMessage, setRecoveryMessage] = React.useState('');
+
+        function fetchArticlesWithTimeout(timeoutMs) {
+          return new Promise(function(resolve, reject) {
+            var settled = false;
+            var timeoutId = setTimeout(function() {
+              if (settled) return;
+              settled = true;
+              reject(new Error('Tiempo de espera agotado. Verifica tu conexión.'));
+            }, timeoutMs || 15000);
+
+            google.script.run
+              .withSuccessHandler(function(list) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                resolve(Array.isArray(list) ? list : []);
+              })
+              .withFailureHandler(function(err) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                reject(err);
+              })
+              .readArticles();
+          });
+        }
+
+        function persistNonEmptyArticles(safeList, source) {
+          setArticles(safeList);
+          try { window.__LAST_ARTICLES__ = safeList; } catch (_) {}
+          writeArticlesCache(safeList, { allowEmpty: false, source: source || 'network' });
+        }
 
         function loadData() {
           setLoadError(null);
+          setRecoveryMessage('');
           var hadCache = !!readArticlesCacheMeta();
           if (!hadCache) setLoading(true);
           setArticlesRefreshing(!!hadCache);
-          var articlesTimeoutId = null;
           dbg('session:request');
           google.script.run
             .withSuccessHandler(function(s) {
@@ -1211,23 +1261,31 @@
                 setArticlesRefreshing(false);
                 return;
               }
-              dbg('articles:request');
-              articlesTimeoutId = setTimeout(function() {
-                dbg('articles:timeout');
+              var retryBackoffMs = [0, 800, 1600, 3000];
+              var maxAttempts = retryBackoffMs.length;
+
+              function finishWithError(message) {
                 setLoading(false);
                 setArticlesRefreshing(false);
-                if (!readArticlesCacheMeta()) setLoadError('Tiempo de espera agotado. Verifica tu conexión.');
-              }, 15000);
-              google.script.run.withSuccessHandler(function(list) {
-                var safeList = list || [];
+                setRecoveryMessage('');
+                if (readArticlesCacheMeta()) {
+                  try {
+                    var m = readArticlesCacheMeta();
+                    if (m && m.list) setArticles(m.list);
+                    window.__LAST_ARTICLES__ = m && m.list ? m.list : [];
+                  } catch (_) {}
+                } else {
+                  setLoadError(message);
+                }
+              }
+
+              function applyLoadedArticles(safeList) {
                 dbg('articles:ok', { count: safeList.length });
-                setArticles(safeList);
-                try { window.__LAST_ARTICLES__ = safeList; } catch (_) {}
-                writeArticlesCache(safeList);
+                persistNonEmptyArticles(safeList, 'network');
                 setLoading(false);
                 setArticlesRefreshing(false);
+                setRecoveryMessage('');
                 setLoadError(null);
-                clearTimeout(articlesTimeoutId);
                 scheduleIdlePrefetchDetails(safeList);
                 var params = new URLSearchParams(window.location.search);
                 var id = params.get('id');
@@ -1235,25 +1293,48 @@
                   var found = safeList.find(function(a) { return a.articleId === id; });
                   if (found && found.slug) navigate('#/articulo/' + found.slug);
                 }
-              }).withFailureHandler(function(err) {
-                dbg('articles:error', err && (err.message || err));
-                setLoading(false);
-                setArticlesRefreshing(false);
-                clearTimeout(articlesTimeoutId);
-                if (readArticlesCacheMeta()) {
-                  try {
-                    var m = readArticlesCacheMeta();
-                    if (m && m.list) setArticles(m.list);
-                    window.__LAST_ARTICLES__ = m.list;
-                  } catch (_) {}
-                } else {
-                  setLoadError('Error al cargar artículos: ' + (err && err.message || err));
+              }
+
+              function attemptLoadArticles(attemptNo) {
+                var backoff = retryBackoffMs[Math.max(0, attemptNo - 1)] || 0;
+                if (backoff > 0) {
+                  setRecoveryMessage('Reintentando conexion... intento ' + attemptNo + ' de ' + maxAttempts + '.');
                 }
-              }).readArticles();
+                var run = function() {
+                  dbg('articles:request', { attempt: attemptNo });
+                  fetchArticlesWithTimeout(15000).then(function(list) {
+                    if (isValidArticlesPayload(list)) {
+                      applyLoadedArticles(list);
+                      return;
+                    }
+                    if (shouldTreatEmptyAsTransient(list)) {
+                      dbg('articles:empty-transient', { attempt: attemptNo });
+                      if (attemptNo < maxAttempts) {
+                        attemptLoadArticles(attemptNo + 1);
+                        return;
+                      }
+                      finishWithError('No se pudieron recuperar los artículos. Intenta nuevamente.');
+                      return;
+                    }
+                    finishWithError('Respuesta inválida al cargar artículos.');
+                  }).catch(function(err) {
+                    dbg('articles:error', { attempt: attemptNo, error: err && (err.message || err) });
+                    if (attemptNo < maxAttempts) {
+                      attemptLoadArticles(attemptNo + 1);
+                      return;
+                    }
+                    finishWithError('Error al cargar artículos: ' + (err && err.message || err));
+                  });
+                };
+                if (backoff > 0) setTimeout(run, backoff);
+                else run();
+              }
+
+              attemptLoadArticles(1);
             })
             .withFailureHandler(function(err) {
               dbg('session:error', err && (err.message || err));
-              if (articlesTimeoutId) clearTimeout(articlesTimeoutId);
+              setRecoveryMessage('');
               setLoadError('Error al cargar sesión: ' + (err && err.message || err));
               setLoading(false);
             })
@@ -1319,7 +1400,8 @@
         if (!session || loading) return e('div', { className: 'app-skeleton-block', 'aria-busy': 'true', 'aria-live': 'polite' },
           e('div', { style: { padding: '24px 0' } },
             e('div', { className: 'skeleton', style: { height: 32, width: '40%', marginBottom: 12, maxWidth: '100%' } }),
-            e('div', { className: 'skeleton', style: { height: 16, width: '60%', marginBottom: 24, maxWidth: '100%' } })
+            e('div', { className: 'skeleton', style: { height: 16, width: '60%', marginBottom: 24, maxWidth: '100%' } }),
+            recoveryMessage ? e('p', { className: 'muted', style: { marginTop: 8 } }, recoveryMessage) : null
           ),
           e(SkeletonList)
         );
