@@ -1,0 +1,28 @@
+name: Desplegar a Apps Script
+
+on:
+  push:
+    branches:
+      - main  # Cambia esto si tu rama principal se llama diferente (ej. master)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar clasp
+        run: npm install -g @google/clasp
+
+      - name: Crear archivo de credenciales
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Empujar código a Google Apps Script
+        run: clasp push -f

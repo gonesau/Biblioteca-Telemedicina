@@ -6,13 +6,78 @@
     <title>Gestión de Artículos</title>
     <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries" defer></script>
     <style>
-      :root { --c-primary-dark:#04013C; --c-primary:#032D6B; --c-primary-mid:#03134E; --c-secondary:#8CA5CE; --c-bg:#D1DBEC; --c-text:#384254; }
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: var(--c-text); font-size: 16.5px; line-height: 1.5; background: var(--c-bg); }
-      header { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; background: #fff; }
-      main { padding: 16px; }
-      .container { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+      :root {
+        --c-primary-dark:#04013C;
+        --c-primary:#032D6B;
+        --c-primary-mid:#03134E;
+        --c-secondary:#8CA5CE;
+        --c-bg:#D1DBEC;
+        --c-bg-soft:#e7edf8;
+        --c-surface:#ffffff;
+        --c-border:#d6deed;
+        --c-text:#384254;
+        --c-text-soft:#607089;
+        --radius-sm:10px;
+        --radius-md:14px;
+        --radius-lg:18px;
+        --shadow-sm:0 2px 8px rgba(4, 1, 60, 0.08);
+        --shadow-md:0 10px 24px rgba(4, 1, 60, 0.12);
+      }
+      body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: var(--c-text); font-size: 16px; line-height: 1.52; background: #e6ebf4; }
+      header { padding: 0; border-bottom: 1px solid rgba(255,255,255,0.24); display: flex; align-items: center; gap: 8px; background: #0c3c93; box-shadow: 0 8px 22px rgba(3, 45, 107, 0.18); }
+      main { padding: 0; }
+      .container { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+      .portal-layout { display: grid; grid-template-columns: 236px 1fr; min-height: 100vh; background: #e6ebf4; }
+      .portal-sidebar { background: linear-gradient(180deg, #191d24 0%, #11151b 100%); color: #dbe3ef; padding: 16px 12px; border-right: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+      .portal-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 12px; margin-bottom: 8px; }
+      .portal-sidebar-brand img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: transparent; }
+      .portal-sidebar-title { color: #fff; font-size: 30px; font-weight: 700; letter-spacing: 0.2px; margin: 4px 8px 18px; }
+      .portal-nav-group { margin-bottom: 10px; }
+      .portal-nav-group summary, .portal-nav-item, .portal-nav-type { color: #d2d9e5; font-size: 13px; line-height: 1.35; cursor: pointer; padding: 6px 8px; border-radius: 6px; list-style: none; display: flex; align-items: center; gap: 8px; text-decoration: none; border: 0; background: transparent; width: 100%; text-align: left; }
+      .portal-nav-group summary:hover, .portal-nav-item:hover, .portal-nav-type:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      .portal-nav-group[open] > summary { color: #fff; font-weight: 700; }
+      .portal-nav-sub { padding-left: 12px; margin-top: 4px; border-left: 1px solid rgba(255,255,255,0.12); }
+      .portal-nav-type.active { background: rgba(16,145,234,0.25); color: #fff; font-weight: 700; }
+      .portal-nav-type i { width: 14px; text-align: center; color: #8ec5ff; }
+      .portal-content { min-width: 0; display: flex; flex-direction: column; }
+      .portal-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 120px; }
+      .portal-brand-strip { display: flex; align-items: center; gap: 24px; color: #fff; }
+      .portal-brand-strip .divider { width: 1px; height: 52px; background: rgba(255,255,255,0.4); }
+      .portal-stage { flex: 1; padding: 0 0 12px; }
+      .portal-main-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 14px 0; }
+      .portal-sticky-shell { position: sticky; bottom: 0; z-index: 40; }
+      .portal-fixed-bottom { height: 70px; background: #ffffff; border-top: 1px solid #cfdbec; display: flex; align-items: center; justify-content: center; gap: 18px; }
+      .portal-fixed-timer { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 210px; }
+      .portal-fixed-timer-value { color: #2ca8dc; font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: 0.3px; }
+      .portal-fixed-controls { display: flex; gap: 8px; }
+      .portal-fixed-controls .btn { min-height: 24px; padding: 2px 8px; font-size: 10px; border-radius: 5px; }
+      .portal-fixed-brand { display: flex; align-items: center; gap: 12px; color: #0f357f; font-size: 24px; font-weight: 700; }
+      .portal-fixed-brand img { height: 30px; width: auto; object-fit: contain; }
+      .portal-fixed-separator { width: 1px; height: 42px; background: #c8d2e4; }
+      .portal-fixed-clock { color: #111827; font-size: 42px; font-weight: 400; letter-spacing: 0.3px; }
+      .portal-fixed-clock-meridian { font-size: 16px; margin-left: 4px; vertical-align: super; }
+      .portal-global-note { background: #1091ea; color: #0b1f3f; font-weight: 700; text-align: center; padding: 6px 10px; font-size: 20px; }
+      .portal-global-note small { font-size: 16px; }
+      .portal-landing { background: #f1f4f9; border: 1px solid #dbe3f1; }
+      .portal-landing-head { text-align: center; background: #ffffff; border-bottom: 1px solid #dbe3f1; padding: 12px 14px; }
+      .portal-landing-head h2 { margin: 0 0 6px; color: #0e3f97; font-size: 42px; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
+      .portal-landing-head p { margin: 4px 0; font-size: 16px; color: #24344c; }
+      .portal-landing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .portal-landing-tile { min-height: 220px; border-right: 1px solid #dbe3f1; border-top: 1px solid #dbe3f1; background: #f3f6fb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+      .portal-landing-tile:hover { background: #e9eef7; transform: translateY(-1px); }
+      .portal-landing-tile:nth-child(3n) { border-right: 0; }
+      .portal-landing-icon { color: #1145a3; font-size: 84px; }
+      .portal-landing-label { color: #0991da; font-size: 28px; line-height: 1.06; font-weight: 900; text-transform: uppercase; text-decoration: underline; text-underline-offset: 3px; text-align: center; }
+      @media (max-width: 1100px) {
+        .portal-layout { grid-template-columns: 1fr; }
+        .portal-sidebar { position: relative; height: auto; }
+        .portal-landing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .portal-landing-tile:nth-child(3n) { border-right: 1px solid #dbe3f1; }
+        .portal-landing-tile:nth-child(2n) { border-right: 0; }
+      }
       /* Responsive: Tablets y móviles grandes */
       @media (max-width: 1024px) {
         .list-view-grid { grid-template-columns: 200px 1fr 200px !important; gap: 12px !important; }
@@ -55,11 +120,22 @@
         .tag { font-size: 11px; padding: 2px 6px; }
         iframe { height: 400px !important; }
       }
+      @media (max-width: 800px) {
+        .portal-fixed-bottom { height: 88px; gap: 8px; padding: 6px; }
+        .portal-fixed-brand { font-size: 20px; gap: 10px; }
+        .portal-fixed-clock { font-size: 30px; }
+        .portal-fixed-timer-value { font-size: 30px; }
+        .portal-global-note { font-size: 14px; }
+        .portal-landing-grid { grid-template-columns: 1fr; }
+        .portal-landing-tile { border-right: 0; min-height: 170px; }
+        .portal-landing-icon { font-size: 62px; }
+        .portal-landing-label { font-size: 20px; }
+      }
       .toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
-      .search { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; width: 280px; background: #fff; font-size: 15px; }
+      .search { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); width: 280px; background: #fff; font-size: 15px; color: var(--c-text); transition: border-color .2s ease, box-shadow .2s ease; }
       .search[type="date"] { padding: 10px 12px; }
-      .btn { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; min-height: 44px; box-sizing: border-box; }
-      .btn:hover { background: #f8fafc; border-color: #d1d5db; }
+      .btn { padding: 10px 14px; border: 1px solid #dbe3f2; border-radius: var(--radius-sm); background: #fff; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; min-height: 42px; box-sizing: border-box; font-weight: 600; }
+      .btn:hover { background: #f8fbff; border-color: #c9d5ec; transform: translateY(-1px); }
       .btn:focus:not(:focus-visible) { outline: none; }
       .btn.primary { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
       .btn.primary:hover { background: var(--c-primary-mid); border-color: var(--c-primary-mid); }
@@ -76,9 +152,9 @@
       .search:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
       table { width: 100%; border-collapse: collapse; }
       th, td { padding: 10px; border-bottom: 1px solid #eef2f7; text-align: left; }
-      .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; }
+      .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 3000; }
       .modal.open { display: flex; }
-      .modal-card { background: #fff; border-radius: 12px; max-width: 960px; width: 96%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
+      .modal-card { background: #fff; border-radius: 12px; max-width: 960px; width: 96%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.12); z-index: 3001; }
       .modal-header { padding: 12px 14px; border-bottom: 1px solid #eef2f7; display:flex; justify-content: space-between; align-items:center; background: #f8fafc; flex-wrap: wrap; gap: 8px; }
       .modal-body { padding: 0; overflow: auto; }
       @media (max-width: 640px) {
@@ -89,8 +165,8 @@
       .editor { height: 200px; }
       .actions { display:flex; gap:10px; }
       .warning { color: #b03030; }
-      .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; transition: all 0.2s ease; }
-      .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
+      .card { background: var(--c-surface); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); transition: all 0.2s ease; }
+      .card:hover { box-shadow: 0 8px 20px rgba(4, 1, 60, 0.1); transform: translateY(-1px); }
       .card.clickable { cursor: pointer; }
       .watermark { position: absolute; inset: 0; pointer-events: none; opacity: 0.12; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #032D6B; }
       .status-badge { display: inline-flex; align-items: center; justify-content: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 8px; }
@@ -124,6 +200,21 @@
       .app-skeleton-block { min-height: 200px; }
       /* Badge/Count styles */
       .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; background: var(--c-primary); color: #fff; border-radius: 10px; font-size: 11px; font-weight: 600; }
+      .page-title { margin: 0; font-size: clamp(1.8rem, 2.4vw, 2.2rem); font-weight: 900; letter-spacing: -0.01em; color: var(--c-primary-dark); line-height: 1.16; }
+      .page-subtitle { margin: 8px 0 0; color: var(--c-text-soft); font-size: 0.95rem; }
+      .panel-heading { margin: 0 0 10px; color: var(--c-primary-dark); font-weight: 800; letter-spacing: -0.01em; }
+      .surface-soft { background: linear-gradient(180deg, #f9fbff 0%, #f3f7ff 100%); border: 1px solid #d8e1f0; }
+      .status-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+      .admin-shell { max-width: 1080px; margin: 0 auto; }
+      .admin-shell .card { box-shadow: var(--shadow-sm); }
+      .stat-card { display: flex; min-width: 180px; flex: 1; flex-direction: column; gap: 8px; border-radius: var(--radius-md); padding: 18px; border: 1px solid var(--c-border); background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); }
+      .stat-card-label { margin: 0; color: var(--c-text-soft); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+      .stat-card-value { margin: 0; color: var(--c-primary-dark); font-size: 1.9rem; font-weight: 900; line-height: 1.1; }
+      .section-toolbar { margin-bottom: 16px; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+      .meta-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: var(--c-primary); border: 1px solid #cfdbf5; font-size: 12px; font-weight: 600; }
+      .summary-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--c-primary-dark); border: 1px solid var(--c-border); }
+      .summary-card .value { font-size: 20px; font-weight: 800; }
+      .portal-list-shell { display: flex; flex-direction: column; gap: 12px; }
       /* Mobile helpers */
       .mobile-sticky { position: sticky; top: 0; z-index: 50; background: #fff; padding: 8px; border-bottom: 1px solid #e5e7eb; }
       .chips-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
@@ -135,9 +226,10 @@
         .toolbar .search { height: 44px !important; padding: 10px 12px !important; }
         .toolbar .btn { height: 44px; display: inline-flex; align-items: center; }
         .toolbar.mobile-sticky { position: sticky; top: 0; z-index: 50; background: #fff; padding: 8px; border-bottom: 1px solid #e5e7eb; }
+        .status-tabs { margin-bottom: 12px; }
       }
       /* Grid responsive control via media queries */
-      .list-view-grid { display: grid; grid-template-columns: 260px 1fr 260px; gap: 16px; align-items: start; }
+      .list-view-grid { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
       @media (max-width: 768px){ .list-view-grid { grid-template-columns: 1fr; } }
       .detail-view-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
       @media (max-width: 768px){ .detail-view-grid { grid-template-columns: 1fr; } }
@@ -178,6 +270,7 @@
       .fav-btn.active { color: #f59e0b; }
       /* Print styles */
       @media print {
+        .portal-sidebar, .portal-footer { display: none !important; }
         header, .toolbar, .fab, .toast-container, aside, .actions, .mobile-sticky, nav, #top-actions, #user-info, .btn { display: none !important; }
         body { background: #fff !important; color: #000 !important; font-size: 12pt; }
         main { padding: 0 !important; }
@@ -192,27 +285,36 @@
     </style>
   </head>
     <body>
-    <header style="border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, var(--c-primary-dark) 0%, var(--c-primary) 100%);">
-      <div class="container">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0;">
-          <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-            <img src="https://i.pinimg.com/originals/57/9b/90/579b90f5e64d7631fc81e55ba716ba9f.png" 
-                 alt="Logo Telemedicina" 
-                 style="height: 60px; width: 60px; object-fit: contain; border-radius: 8px; padding: 4px; flex-shrink: 0; cursor: pointer;" 
-                 role="button" tabindex="0" aria-label="Ir al inicio"
-                 onclick="goHomeReload()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goHomeReload();}"
-                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><text y=%2220%22 font-size=%2220%22>📚</text></svg>'" />
-            <strong id="header-title" style="color: #fff; font-size:19px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer;" role="button" tabindex="0" aria-label="Ir al inicio" onclick="goHomeReload()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goHomeReload();}">Biblioteca Telemedicina</strong>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end;">
-            <div id="user-info" class="muted" style="font-size:14px; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;"></div>
-            <nav style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;" id="top-actions"></nav>
-          </div>
+    <div class="portal-layout">
+      <aside class="portal-sidebar" aria-label="Navegación lateral">
+        <div class="portal-sidebar-brand">
+          <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUBMi0DKkhigWHET-v1cFBoZ8-6-p7jy4W5YwnW2GJEPlMDc4vxQf1RTU6XljVhxlrXeXF4XvlwYBWj1KRdy8c9D9l5nJOROoRQf8CGPqMyGrd2I0RXsJLTJjwDchS1H2s-FIkDbsJycAcDHg8fiYb9-FCJo-Ng6lwTov73tS90ihtYYMrGcYT7ypuw=w16383" alt="DoctorSV logo" />
         </div>
-      </div>
-    </header>
-    <main>
-      <div id="root" class="container"></div>
+        <div class="portal-sidebar-title">Portal Médico</div>
+        <a class="portal-nav-item" href="#/" onclick="goHomeReload()">Página principal</a>
+        <details class="portal-nav-group" open>
+          <summary>Categorías</summary>
+          <div class="portal-nav-sub" id="sidebar-dynamic-menu">
+            <span class="portal-nav-item">Cargando categorías...</span>
+          </div>
+        </details>
+      </aside>
+      <section class="portal-content">
+        <header>
+          <div class="container portal-header-inner">
+            <div class="portal-brand-strip">
+              <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUBMi0DKkhigWHET-v1cFBoZ8-6-p7jy4W5YwnW2GJEPlMDc4vxQf1RTU6XljVhxlrXeXF4XvlwYBWj1KRdy8c9D9l5nJOROoRQf8CGPqMyGrd2I0RXsJLTJjwDchS1H2s-FIkDbsJycAcDHg8fiYb9-FCJo-Ng6lwTov73tS90ihtYYMrGcYT7ypuw=w16383" alt="DoctorSV" style="height:58px; width:auto; object-fit:contain;" />
+              <span class="divider"></span>
+              <div style="font-size:20px; font-weight:700; letter-spacing:0.4px;">Gobierno de El Salvador</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+              <div id="user-info" class="muted" style="font-size:14px; color: rgba(255,255,255,0.94); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;"></div>
+              <nav style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;" id="top-actions"></nav>
+            </div>
+          </div>
+        </header>
+        <main class="portal-stage">
+          <div id="root" class="portal-main-wrap"></div>
       <div id="preview-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="preview-title">
         <div class="modal-card">
           <div class="modal-header">
@@ -309,7 +411,10 @@
       </div>
       <div id="toast-container" class="toast-container"></div>
       <div id="confirm-root"></div>
-    </main>
+        </main>
+        <div id="global-bottom-bar"></div>
+      </section>
+    </div>
 
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -1019,6 +1124,58 @@
         return e('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } }, cards);
       }
 
+      function GlobalBottomBar() {
+        const [now, setNow] = React.useState(new Date());
+        const [elapsedMs, setElapsedMs] = React.useState(0);
+        const [isRunning, setIsRunning] = React.useState(false);
+
+        React.useEffect(function() {
+          var tick = setInterval(function() { setNow(new Date()); }, 1000);
+          return function() { clearInterval(tick); };
+        }, []);
+
+        React.useEffect(function() {
+          if (!isRunning) return;
+          var timer = setInterval(function() {
+            setElapsedMs(function(prev) { return prev + 10; });
+          }, 10);
+          return function() { clearInterval(timer); };
+        }, [isRunning]);
+
+        function formatStopwatch(ms) {
+          var cent = Math.floor((ms % 1000) / 10);
+          var sec = Math.floor(ms / 1000) % 60;
+          var min = Math.floor(ms / 60000);
+          return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + '.' + String(cent).padStart(2, '0');
+        }
+
+        return e('div', { className: 'portal-sticky-shell' },
+          e('div', { className: 'portal-global-note' },
+            e('small', null, 'Si te surge alguna duda o consulta, coméntasela a tu supervisor.')
+          ),
+          e('div', { className: 'portal-fixed-bottom' },
+            e('div', { className: 'portal-fixed-timer' },
+              e('div', { className: 'portal-fixed-timer-value' }, formatStopwatch(elapsedMs)),
+              e('div', { className: 'portal-fixed-controls' },
+                e('button', { className: 'btn primary', onClick: function() { setIsRunning(true); } }, 'Inicio'),
+                e('button', { className: 'btn', onClick: function() { setIsRunning(false); } }, 'Pausa'),
+                e('button', { className: 'btn ghost', onClick: function() { setElapsedMs(0); setIsRunning(false); } }, 'Reiniciar')
+              )
+            ),
+            e('div', { className: 'portal-fixed-brand' },
+              e('img', { src: 'https://lh3.googleusercontent.com/sitesv/AA5AbUBMi0DKkhigWHET-v1cFBoZ8-6-p7jy4W5YwnW2GJEPlMDc4vxQf1RTU6XljVhxlrXeXF4XvlwYBWj1KRdy8c9D9l5nJOROoRQf8CGPqMyGrd2I0RXsJLTJjwDchS1H2s-FIkDbsJycAcDHg8fiYb9-FCJo-Ng6lwTov73tS90ihtYYMrGcYT7ypuw=w16383', alt: 'DoctorSV' }),
+              e('span', null, 'DoctorSV'),
+              e('span', { className: 'portal-fixed-separator' }),
+              e('span', null, 'Gobierno')
+            ),
+            e('div', { className: 'portal-fixed-clock' },
+              now.toLocaleTimeString('en-US', { hour12: true }),
+              e('span', { className: 'portal-fixed-clock-meridian' }, '')
+            )
+          )
+        );
+      }
+
       function App() {
         const hash = useHash();
         const [session, setSession] = React.useState(null);
@@ -1108,11 +1265,17 @@
         React.useEffect(function() {
           var el = document.getElementById('user-info');
           var top = document.getElementById('top-actions');
+          var clockTimer = null;
           if (session) {
             var roleStr = '';
             if (session.isAdmin) roleStr = ' (admin)';
             else if (session.isGuestEditor) roleStr = ' (editor invitado)';
-            el.textContent = session.email + roleStr;
+            var drawUserInfo = function() {
+              if (!el) return;
+              el.textContent = session.email + roleStr + ' • ' + new Date().toLocaleTimeString();
+            };
+            drawUserInfo();
+            clockTimer = setInterval(drawUserInfo, 1000);
             
             if (top) {
               top.innerHTML = '';
@@ -1140,6 +1303,9 @@
               }
             }
           }
+          return function() {
+            if (clockTimer) clearInterval(clockTimer);
+          };
         }, [session]);
 
         if (loadError) return e('div', { className: 'card', style: { textAlign: 'center', maxWidth: 480, margin: '80px auto', padding: '40px' } },
@@ -1161,49 +1327,38 @@
 
         const route = (hash || '#/').slice(1);
         const parts = route.split('/').filter(Boolean);
+        var pageContent = null;
         if (parts[0] === 'articulo' && parts[1]) {
           const slugNorm = normalizeArticleSlugFromHash(parts[1]);
-          return e(ArticleDetail, { slug: slugNorm, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor, session: session });
+          pageContent = e(ArticleDetail, { slug: slugNorm, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor, session: session });
+        } else if (parts[0] === 'admin') {
+          if (!session.isAdmin) {
+            pageContent = e('div', { className: 'warning' }, 'Solo administradores.');
+          } else if (parts[1] === 'dashboard') {
+            pageContent = e(AdminDashboard);
+          } else if (parts[1] === 'types') {
+            pageContent = e(AdminTypes);
+          } else {
+            pageContent = e(AdminView);
+          }
+        } else {
+          pageContent = e(ListView, { articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor });
         }
-        if (parts[0] === 'admin') {
-          if (!session.isAdmin) return e('div', { className: 'warning' }, 'Solo administradores.');
-          if (parts[1] === 'dashboard') return e(AdminDashboard);
-          if (parts[1] === 'types') return e(AdminTypes);
-          return e(AdminView);
-        }
-        return e(ListView, { articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin: session.isAdmin, isGuestEditor: session.isGuestEditor });
+        return pageContent;
       }
 
       function ListView({ articles, articlesRefreshing, query, setQuery, mimeFilter, setMimeFilter, dateFrom, setDateFrom, dateTo, setDateTo, isAdmin, isGuestEditor }) {
         const isMobile = useIsMobile();
-        const [pathologiesCount, setPathologiesCount] = React.useState('');
-        const [editingCount, setEditingCount] = React.useState(false);
-        const [tempCount, setTempCount] = React.useState('');
-        const [showFilters, setShowFilters] = React.useState(false);
-        React.useEffect(() => {
-          try {
-            google.script.run.withSuccessHandler((v) => { setPathologiesCount(v || ''); }).withFailureHandler((err) => dbg('metric:get:error', err && (err.message || err))).getSiteMetric('pathologies_count');
-          } catch (e) { dbg('metric:get:ex', e); }
-        }, []);
-        function onSaveCount() {
-          const val = String(tempCount || '').trim();
-          if (!/^\d+$/.test(val)) { showToast('Ingresa un número válido', 'warning'); return; }
-          try {
-            google.script.run.withSuccessHandler((res) => { setPathologiesCount(res && res.value || val); setEditingCount(false); showToast('Métrica guardada', 'success'); }).withFailureHandler((err) => { dbg('metric:update:error', err && (err.message || err)); showToast('No se pudo guardar', 'error'); }).updateSiteMetric({ key: 'pathologies_count', value: val });
-          } catch (e) { dbg('metric:update:ex', e); }
-        }
+        const hash = useHash();
         const [selectedTypeId, setSelectedTypeId] = React.useState('');
-        const [selectedTags, setSelectedTags] = React.useState([]);
-        const toggleTag = (slug) => setSelectedTags((prev) => prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]);
-
-        // Filtro de estado solo para admin/editor invitado
-        const [statusFilter, setStatusFilter] = React.useState('');
+        const [showLibraryPanel, setShowLibraryPanel] = React.useState(false);
         // Paginación
         const ITEMS_PER_PAGE = 20;
         const [currentPage, setCurrentPage] = React.useState(1);
         // Favoritos
         const [favs, setFavs] = React.useState(function() { return getFavorites(); });
-        const [showFavsOnly, setShowFavsOnly] = React.useState(false);
+
+        
 
         // Control de expansión de tags por artículo (mostrar más de 5)
         const [expandedTagArticles, setExpandedTagArticles] = React.useState(() => new Set());
@@ -1245,15 +1400,7 @@
           });
         }, [articles]);
 
-        const baseFiltered = React.useMemo(() => {
-          const byDate = (articles || []).filter(a => {
-            const created = a.createdAt ? new Date(a.createdAt) : null;
-            const fromOk = !dateFrom || (created && created >= new Date(dateFrom));
-            const toOk = !dateTo || (created && created <= new Date(dateTo + 'T23:59:59'));
-            return fromOk && toOk;
-          });
-          return byDate;
-        }, [articles, dateFrom, dateTo]);
+        const baseFiltered = React.useMemo(() => (articles || []), [articles]);
 
         const searched = React.useMemo(() => {
           const raw = (debouncedQuery || '').trim();
@@ -1282,16 +1429,8 @@
         }, [baseFiltered, fuse, debouncedQuery]);
 
         const faceted = React.useMemo(() => {
-          var result = searched.filter(a => {
-            const typeOk = !selectedTypeId || a.typeId === selectedTypeId;
-            const tagsOk = !selectedTags.length || selectedTags.every(s => (a.tags || []).some(t => (t.slug || '') === s));
-            const mimeOk = !mimeFilter || a.driveMimeType === mimeFilter;
-            const statusOk = !statusFilter || (a.status || 'PUBLISHED') === statusFilter;
-            const favOk = !showFavsOnly || favs.indexOf(a.articleId) >= 0;
-            return typeOk && tagsOk && mimeOk && statusOk && favOk;
-          });
-          return result;
-        }, [searched, selectedTypeId, selectedTags, mimeFilter, statusFilter, showFavsOnly, favs]);
+          return searched.filter(a => !selectedTypeId || a.typeId === selectedTypeId);
+        }, [searched, selectedTypeId]);
 
         const emptyReason = React.useMemo(() => {
           const lib = articles || [];
@@ -1303,7 +1442,7 @@
           return null;
         }, [articles, searched, faceted, debouncedQuery]);
 
-        React.useEffect(function() { setCurrentPage(1); }, [debouncedQuery, selectedTypeId, selectedTags, mimeFilter, statusFilter, showFavsOnly]);
+        React.useEffect(function() { setCurrentPage(1); }, [debouncedQuery, selectedTypeId]);
         const totalPages = Math.max(1, Math.ceil(faceted.length / ITEMS_PER_PAGE));
         const paginatedFaceted = faceted.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -1318,19 +1457,17 @@
           }
           return Object.values(map).sort((x,y) => (y.count||0)-(x.count||0));
         }, [searched]);
-
-        const popularTags = React.useMemo(() => {
-          const counter = {};
-          for (const a of searched) {
-            for (const t of (a.tags || [])) {
-              const slug = t.slug || '';
-              if (!slug) continue;
-              counter[slug] = counter[slug] || { slug, name: t.name || slug, count: 0 };
-              counter[slug].count++;
-            }
+        const sidebarTypeCounts = React.useMemo(() => {
+          const map = {};
+          for (const a of (articles || [])) {
+            const key = a.typeId || '';
+            const name = a.typeName || 'General';
+            const color = a.typeColor || '#94a3b8';
+            if (!map[key]) map[key] = { typeId: key, name, color, count: 0 };
+            map[key].count++;
           }
-          return Object.values(counter).sort((a,b) => b.count - a.count).slice(0, 30);
-        }, [searched]);
+          return Object.values(map).sort((x, y) => (x.name || '').localeCompare(y.name || ''));
+        }, [articles]);
 
         const grouped = React.useMemo(() => {
           const g = {};
@@ -1342,125 +1479,90 @@
           return Object.values(g);
         }, [paginatedFaceted]);
 
-        const mimes = Array.from(new Set((articles || []).map(a => a.driveMimeType).filter(Boolean))).sort();
+        function iconByTitle(name) {
+          var val = String(name || '').toLowerCase();
+          if (val.includes('pediatr')) return 'fa-solid fa-baby';
+          if (val.includes('flujo') || val.includes('proceso')) return 'fa-solid fa-wave-square';
+          if (val.includes('refer')) return 'fa-solid fa-right-left';
+          if (val.includes('script')) return 'fa-solid fa-file-signature';
+          if (val.includes('anuncio')) return 'fa-solid fa-bullhorn';
+          if (val.includes('servicio')) return 'fa-solid fa-calendar-check';
+          if (val.includes('escenario')) return 'fa-solid fa-notes-medical';
+          if (val.includes('locker')) return 'fa-solid fa-lock';
+          if (val.includes('biblioteca') || val.includes('protocolo')) return 'fa-solid fa-book-medical';
+          return 'fa-solid fa-stethoscope';
+        }
+        React.useEffect(function() {
+          var currentHash = hash || '#/';
+          if (currentHash === '#/' || currentHash === '') {
+            setSelectedTypeId('');
+            setShowLibraryPanel(false);
+            return;
+          }
+          var match = currentHash.match(/^#\/categoria\/(.+)$/);
+          if (match && match[1]) {
+            var rawType = '';
+            try { rawType = decodeURIComponent(match[1]); } catch (_) { rawType = match[1]; }
+            setSelectedTypeId(rawType === 'todos' ? '' : rawType);
+            setShowLibraryPanel(true);
+          }
+        }, [hash]);
 
-        const reviewCount = React.useMemo(() => (articles || []).filter(a => (a.status || 'PUBLISHED') === 'NEEDS_REVIEW').length, [articles]);
+        function applyTypeFilter(typeId) {
+          var normalizedTypeId = String(typeId || '').trim();
+          var targetHash = normalizedTypeId ? '#/categoria/' + encodeURIComponent(normalizedTypeId) : '#/categoria/todos';
+          navigate(targetHash);
+        }
+
+        const landingTiles = React.useMemo(function() {
+          return (sidebarTypeCounts || []).slice(0, 9).map(function(t) {
+            return { key: t.typeId || t.name, label: t.name || 'General', icon: iconByTitle(t.name), typeId: t.typeId || '' };
+          });
+        }, [sidebarTypeCounts]);
+
+        React.useEffect(function() {
+          var host = document.getElementById('sidebar-dynamic-menu');
+          if (!host) return;
+          host.innerHTML = '';
+          var allBtn = document.createElement('button');
+          allBtn.className = 'portal-nav-type' + (selectedTypeId ? '' : ' active');
+          allBtn.innerHTML = '<i class="fa-solid fa-table-cells-large"></i><span>Todos</span>';
+          allBtn.onclick = function() { applyTypeFilter(''); };
+          host.appendChild(allBtn);
+          (sidebarTypeCounts || []).forEach(function(t) {
+            var btn = document.createElement('button');
+            btn.className = 'portal-nav-type' + (selectedTypeId === (t.typeId || '') ? ' active' : '');
+            btn.innerHTML = '<i class="' + iconByTitle(t.name) + '"></i><span>' + (t.name || 'General') + ' (' + String(t.count || 0) + ')</span>';
+            btn.onclick = function() { applyTypeFilter(t.typeId || ''); };
+            host.appendChild(btn);
+          });
+        }, [sidebarTypeCounts, selectedTypeId]);
 
         return e(React.Fragment, null,
-          e('div', { style: { marginBottom: (isAdmin || isGuestEditor) ? '12px' : '24px' } },
-            e('h1', { style: { fontSize: '32px', fontWeight: 900, color: 'var(--c-primary-dark)', marginBottom: '8px', lineHeight: 1.2 } }, 'Artículos'),
-            e('p', { className: 'muted', style: { fontSize: '15px', lineHeight: 1.5 } }, 'Explora y accede a todos los recursos disponibles en la biblioteca.'),
-            articlesRefreshing && e('p', { className: 'muted', role: 'status', style: { fontSize: '13px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: 8 } },
-              e('span', { className: 'spinner', style: { width: 14, height: 14, borderWidth: 2 } }),
-              'Actualizando el listado…'
-            )
-          ),
-          // Tabs de filtro de estado (solo admin y editor invitado)
-          (isAdmin || isGuestEditor) && e('div', { style: { display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' } },
-            e('button', {
-              className: 'btn' + (statusFilter === '' ? ' primary' : ''),
-              onClick: function() { setStatusFilter(''); },
-              style: { borderRadius: '999px', fontSize: '13px', padding: '6px 16px' }
-            }, 'Todos'),
-            e('button', {
-              className: 'btn' + (statusFilter === 'PUBLISHED' ? ' primary' : ''),
-              onClick: function() { setStatusFilter('PUBLISHED'); },
-              style: { borderRadius: '999px', fontSize: '13px', padding: '6px 16px' }
-            }, e('span', { className: 'status-badge published', style: { marginRight: 4 } }), 'Publicados'),
-            e('button', {
-              className: 'btn' + (statusFilter === 'NEEDS_REVIEW' ? ' primary' : ''),
-              onClick: function() { setStatusFilter('NEEDS_REVIEW'); },
-              style: { borderRadius: '999px', fontSize: '13px', padding: '6px 16px' }
-            },
-              e('span', { className: 'status-badge needs_review', style: { marginRight: 4 } }),
-              'En revisión',
-              reviewCount > 0 && e('span', { style: { marginLeft: 6, background: '#f59e0b', color: '#fff', borderRadius: '999px', padding: '1px 7px', fontSize: '11px', fontWeight: 700 } }, reviewCount)
-            )
-          ),
-          // Tarjeta discreta de métrica (patologías)
-          e('div', { className: 'card', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px', background: '#fff', color: 'var(--c-primary-dark)', border: '1px solid #e5e7eb' } },
-            e('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
-              e('span', { className: 'material-symbols-outlined', style: { fontSize: 24, color: '#032D6B' } }, 'local_hospital'),
-              e('div', null,
-                e('div', { style: { fontSize: 13, color: '#475569', marginBottom: 2 } }, 'Cantidad de patologías abordadas en las guías de atención'),
-                !editingCount ? e('div', { style: { fontSize: 20, fontWeight: 800 } }, String(pathologiesCount || '—')) : e('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-                  e('input', { className: 'search', value: tempCount, onChange: ev => setTempCount(ev.target.value), placeholder: '68', style: { width: 110 } }),
-                  e('button', { className: 'btn primary', onClick: onSaveCount }, 'Guardar'),
-                  e('button', { className: 'btn', onClick: () => setEditingCount(false) }, 'Cancelar')
-                )
-              )
+          !showLibraryPanel ? e('section', { className: 'portal-landing' },
+            e('div', { className: 'portal-landing-head' },
+              e('h2', null, 'Bienvenido a portal médico de DoctorSV'),
+              e('p', null, 'Este es un centro de recursos y materiales de consulta para nuestro equipo médico.'),
+              e('p', null, 'Te invitamos a consultar los siguientes materiales')
             ),
-            isAdmin && !editingCount && e('button', { className: 'btn', onClick: () => { setTempCount(String(pathologiesCount || '')); setEditingCount(true); } }, e('span', { className: 'material-symbols-outlined icon' }, 'edit'), 'Editar')
-          ),
-          // Toolbar (compacta en móvil)
-          (isMobile ?
-            e('div', { className: 'toolbar mobile-sticky', style: { gap: '8px' } },
-              e('input', { className: 'search', placeholder: 'Buscar artículos…', 'aria-label': 'Buscar en artículos', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { flex: '1 1 auto', width: '100%' } }),
-              e('div', { style: { display: 'flex', gap: 8, width: '100%' } },
-                e('button', { className: 'btn', onClick: () => setShowFilters(!showFilters), style: { flex: '1 1 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'tune'), (showFilters ? 'Ocultar filtros' : 'Filtros')),
-                isAdmin && e('button', { className: 'btn primary', onClick: () => navigate('#/admin'), style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Nuevo')
-              )
-            ) :
-            e('div', { className: 'toolbar', style: { marginBottom: '16px', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' } },
-              e('label', { className: 'filter-field', style: { flex: '1 1 280px', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: 4 } },
-                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Buscar'),
-                e('input', { className: 'search', placeholder: 'Título, tipo, etiquetas…', 'aria-label': 'Buscar en artículos', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { width: '100%' } })
-              ),
-              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Tipo de archivo'),
-                e('select', { className: 'btn', value: mimeFilter, onChange: ev => { dbg('filter:mime', ev.target.value); setMimeFilter(ev.target.value); }, 'aria-label': 'Filtrar por tipo de archivo', style: { minWidth: '140px' } },
-                  e('option', { value: '' }, 'Todos'),
-                  mimes.map(m => e('option', { key: m, value: m }, m))
-                )
-              ),
-              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Desde'),
-                e('input', { className: 'search', type: 'date', value: dateFrom, onChange: ev => { dbg('filter:dateFrom', ev.target.value); setDateFrom(ev.target.value); }, 'aria-label': 'Fecha de creación desde', style: { width: 'auto' } })
-              ),
-              e('label', { className: 'filter-field', style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 600 } }, 'Hasta'),
-                e('input', { className: 'search', type: 'date', value: dateTo, onChange: ev => { dbg('filter:dateTo', ev.target.value); setDateTo(ev.target.value); }, 'aria-label': 'Fecha de creación hasta', style: { width: 'auto' } })
-              ),
-              e('button', { className: 'btn' + (showFavsOnly ? ' primary' : ''), onClick: function() { setShowFavsOnly(!showFavsOnly); }, title: 'Mis favoritos', style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, showFavsOnly ? 'star' : 'star_border'), favs.length > 0 && e('span', { className: 'badge', style: { marginLeft: 4 } }, String(favs.length))),
-              isAdmin && e('button', { className: 'btn', onClick: function() { exportToCSV(faceted); }, title: 'Exportar CSV', style: { flex: '0 0 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'download')),
-              isAdmin && e('button', { className: 'btn primary', onClick: () => navigate('#/admin'), style: { flex: '0 1 auto' } }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Nuevo')
-            )
-          ),
-          // Panel de filtros desplegable (solo móvil)
-          (isMobile && showFilters) && e('div', { className: 'card', style: { marginTop: '8px' } },
-            e('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
-              e('select', { className: 'search', value: mimeFilter, onChange: ev => setMimeFilter(ev.target.value), style: { width: '100%' } },
-                e('option', { value: '' }, 'Todos los tipos de archivo'),
-                mimes.map(m => e('option', { key: m, value: m }, m))
-              ),
-              e('div', { style: { display: 'flex', gap: '8px' } },
-                e('input', { className: 'search', type: 'date', value: dateFrom, onChange: ev => setDateFrom(ev.target.value), style: { flex: 1 } }),
-                e('input', { className: 'search', type: 'date', value: dateTo, onChange: ev => setDateTo(ev.target.value), style: { flex: 1 } })
+            e('div', { className: 'portal-landing-grid' },
+              landingTiles.length ? landingTiles.map(function(tile) {
+                return e('button', { key: tile.key, className: 'portal-landing-tile', onClick: function() { applyTypeFilter(tile.typeId); } },
+                  e('i', { className: tile.icon + ' portal-landing-icon', 'aria-hidden': 'true' }),
+                  e('span', { className: 'portal-landing-label' }, tile.label)
+                );
+              }) : e('div', { className: 'card empty-state', style: { gridColumn: '1 / -1' } },
+                e('h3', { style: { margin: '0 0 8px', color: 'var(--c-primary-dark)' } }, 'Sin categorías disponibles')
               )
             )
+          ) : e('section', { className: 'portal-list-shell' },
+          e('div', { className: 'card', style: { marginTop: 12, marginBottom: 6 } },
+            e('label', { style: { display: 'block' } },
+              e('span', { className: 'muted', style: { fontSize: '12px', fontWeight: 700 } }, 'Buscar'),
+              e('input', { className: 'search', placeholder: 'Título, tipo, etiquetas…', 'aria-label': 'Buscar en artículos', value: query, onChange: ev => { dbg('filter:query', ev.target.value); setQuery(ev.target.value); }, style: { width: '100%', maxWidth: 'none', marginTop: 6 } })
+            )
           ),
-          e('div', { className: 'list-view-grid' },
-            // izquierda: índice global de tipos (colapsable en móvil)
-            (!isMobile ?
-              e('aside', { className: 'card', style: { position: 'sticky', top: '12px' } },
-                e('h3', { style: { marginTop: 0, marginBottom: '8px', color: 'var(--c-primary-dark)' } }, 'Tipos'),
-                e('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-                  e('button', { className: 'btn' + (selectedTypeId === '' ? ' primary' : ''), style: { justifyContent: 'space-between' }, onClick: () => setSelectedTypeId(''), 'aria-label': 'Mostrar todos los tipos', 'aria-pressed': selectedTypeId === '' },
-                    e('span', null, 'Todos'), e('span', { className: 'badge' }, String(searched.length || 0))
-                  ),
-                  typeCounts.map(t => e('button', { key: t.typeId || 'none', className: 'btn' + (selectedTypeId === t.typeId ? ' primary' : ''), style: { justifyContent: 'space-between', borderColor: selectedTypeId === t.typeId ? t.color : undefined }, onClick: () => setSelectedTypeId(t.typeId || ''), 'aria-label': 'Filtrar por tipo ' + (t.name || 'General'), 'aria-pressed': selectedTypeId === t.typeId },
-                    e('span', null, t.name || 'General'), e('span', { className: 'badge' }, String(t.count || 0))
-                  ))
-                )
-              ) :
-              e('details', { className: 'card', open: false },
-                e('summary', { style: { cursor: 'pointer', fontWeight: 700, color: 'var(--c-primary-dark)' } }, 'Tipos'),
-                e('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' } },
-                  e('button', { className: 'btn' + (selectedTypeId === '' ? ' primary' : ''), style: { justifyContent: 'space-between' }, onClick: () => setSelectedTypeId('') }, e('span', null, 'Todos'), e('span', { className: 'badge' }, String(searched.length || 0))),
-                  typeCounts.map(t => e('button', { key: t.typeId || 'none', className: 'btn' + (selectedTypeId === t.typeId ? ' primary' : ''), style: { justifyContent: 'space-between' }, onClick: () => setSelectedTypeId(t.typeId || '') }, e('span', null, t.name || 'General'), e('span', { className: 'badge' }, String(t.count || 0))))
-                )
-              )
-            ),
+          e('div', { className: 'list-view-grid', style: { gridTemplateColumns: '1fr' } },
             // centro: lista agrupada
             e('section', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
               faceted.length === 0 ? e('div', { className: 'card empty-state', role: 'status' },
@@ -1525,22 +1627,8 @@
                 e('button', { className: 'btn', disabled: currentPage >= totalPages, onClick: function() { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); } }, 'Siguiente', e('span', { className: 'material-symbols-outlined icon' }, 'chevron_right')),
                 e('button', { className: 'btn', disabled: currentPage >= totalPages, onClick: function() { setCurrentPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); } }, e('span', { className: 'material-symbols-outlined icon' }, 'last_page'))
               ) : null
-            ),
-            // derecha: tags populares (colapsable y deslizable en móvil)
-            (!isMobile ?
-              e('aside', { className: 'card', style: { position: 'sticky', top: '12px' } },
-                e('h3', { style: { marginTop: 0, marginBottom: '8px', color: 'var(--c-primary-dark)' } }, 'Tags'),
-                e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
-                  popularTags.map(t => e('button', { key: t.slug, className: 'tag' + (selectedTags.includes(t.slug) ? ' selected' : ''), onClick: () => toggleTag(t.slug), 'aria-label': 'Filtrar por tag ' + t.name, 'aria-pressed': selectedTags.includes(t.slug) }, '#', t.name, ' (', t.count, ')'))
-                )
-              ) :
-              e('details', { className: 'card', open: false },
-                e('summary', { style: { cursor: 'pointer', fontWeight: 700, color: 'var(--c-primary-dark)' } }, 'Tags'),
-                e('div', { className: 'chips-scroll', style: { marginTop: '8px' } },
-                  popularTags.map(t => e('button', { key: t.slug, className: 'tag' + (selectedTags.includes(t.slug) ? ' selected' : ''), onClick: () => toggleTag(t.slug), 'aria-label': 'Filtrar por tag ' + t.name, 'aria-pressed': selectedTags.includes(t.slug) }, '#', t.name, ' (', t.count, ')'))
-                )
-              )
             )
+          )
           ),
           isAdmin ? e('button', { className: 'btn primary fab', onClick: function() { navigate('#/admin'); } }, e('span', { className: 'material-symbols-outlined icon' }, 'add'), 'Nuevo') : null
         );
@@ -1945,7 +2033,7 @@
           });
         }
 
-        return e('div', null,
+        return e('div', { className: 'admin-shell' },
           e('div', { className: 'card' },
             e('h2', { style: { marginTop: 0, color: 'var(--c-primary-dark)' } }, editId ? 'Editar artículo' : 'Nuevo artículo'),
             e('div', { style: { marginBottom: '16px' } },
@@ -2123,10 +2211,10 @@
           );
         }
 
-        return e('div', { className: 'p-4', style: { maxWidth: 960, margin: '0 auto' } },
-          e('div', { className: 'flex flex-wrap items-center justify-between gap-3 mb-6' },
+        return e('div', { className: 'admin-shell', style: { maxWidth: 960, margin: '0 auto' } },
+          e('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 } },
             e('h1', { style: { margin: 0, color: 'var(--c-primary-dark)', fontSize: '1.5rem' } }, 'Categorías (tipos de artículo)'),
-            e('div', { className: 'flex flex-wrap gap-2' },
+            e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
               e('button', { className: 'btn ghost', disabled: syncing, onClick: syncDrive }, e('span', { className: 'material-symbols-outlined icon' }, 'cloud_sync'), syncing ? 'Sincronizando…' : 'Desde carpetas Drive'),
               e('button', { className: 'btn', onClick: function() { navigate('#/'); } }, e('span', { className: 'material-symbols-outlined icon' }, 'arrow_back'), 'Biblioteca')
             )
@@ -2191,10 +2279,10 @@
       }
 
       function StatCard({ title, value, icon }) {
-        return e('div', { className: 'flex min-w-[158px] flex-1 flex-col gap-2 rounded-xl p-6 border border-gray-200 bg-white' },
-          e('div', { className: 'text-blue-600' }, e('span', { className: 'material-symbols-outlined', style: { fontSize: 32 } }, icon || 'insights')),
-          e('p', { className: 'text-base font-medium text-gray-600' }, title),
-          e('p', { className: 'text-3xl font-bold tracking-tight text-gray-800' }, value)
+        return e('div', { className: 'stat-card' },
+          e('div', { className: 'meta-chip' }, e('span', { className: 'material-symbols-outlined', style: { fontSize: 20 } }, icon || 'insights'), 'Indicador'),
+          e('p', { className: 'stat-card-label' }, title),
+          e('p', { className: 'stat-card-value' }, value)
         );
       }
 
@@ -2206,33 +2294,33 @@
           google.script.run.withSuccessHandler((s) => { setStats(s || { totalArticles: 0, recentEdits7d: 0 }); }).withFailureHandler((err) => dbg('dash:stats:error', err && (err.message || err))).getDashboardStats();
           google.script.run.withSuccessHandler((a) => { setActivity(a || []); setLoading(false); }).withFailureHandler((err) => { dbg('dash:activity:error', err && (err.message || err)); setLoading(false); }).getRecentActivity(10);
         }, []);
-        return e('div', { className: 'p-4' },
-          e('div', { className: 'flex flex-wrap justify-between gap-3 mb-6' },
-            e('p', { className: 'text-2xl font-black tracking-tight text-gray-800' }, 'Administrator Dashboard')
+        return e('div', { className: 'admin-shell' },
+          e('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 18 } },
+            e('h1', { className: 'page-title' }, 'Dashboard administrativo')
           ),
-          e('div', { className: 'flex flex-wrap gap-4' },
-            e(StatCard, { title: 'Total Articles', value: String(stats.totalArticles || 0), icon: 'article' }),
-            e(StatCard, { title: 'Recent Edits (7d)', value: String(stats.recentEdits7d || 0), icon: 'history' })
+          e('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12 } },
+            e(StatCard, { title: 'Total de artículos', value: String(stats.totalArticles || 0), icon: 'article' }),
+            e(StatCard, { title: 'Ediciones en 7 días', value: String(stats.recentEdits7d || 0), icon: 'history' })
           ),
-          e('div', { className: 'rounded-xl border border-gray-200 bg-white p-6 mt-6' },
-            e('div', { className: 'flex items-center justify-between mb-4' },
-              e('h2', { className: 'text-lg font-bold text-gray-800' }, 'Recent Activity'),
-              e('button', { className: 'rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white', onClick: () => navigate('#/') }, 'View Logs')
+          e('div', { className: 'card', style: { marginTop: 16 } },
+            e('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 12, flexWrap: 'wrap' } },
+              e('h2', { className: 'panel-heading' }, 'Actividad reciente'),
+              e('button', { className: 'btn ghost', onClick: () => navigate('#/') }, 'Ver biblioteca')
             ),
-            loading ? e('div', { className: 'loading-container', style: { padding: '24px' } }, e('div', { className: 'spinner' }), e('p', { className: 'muted' }, 'Cargando actividad...')) : e('div', { className: 'overflow-auto' },
-              e('table', { className: 'min-w-full' },
+            loading ? e('div', { className: 'loading-container', style: { padding: '24px' } }, e('div', { className: 'spinner' }), e('p', { className: 'muted' }, 'Cargando actividad...')) : e('div', { style: { overflow: 'auto' } },
+              e('table', null,
                 e('thead', null, e('tr', null,
-                  e('th', { className: 'text-left p-2' }, 'Fecha'),
-                  e('th', { className: 'text-left p-2' }, 'Acción'),
-                  e('th', { className: 'text-left p-2' }, 'Título'),
-                  e('th', { className: 'text-left p-2' }, 'Usuario')
+                  e('th', null, 'Fecha'),
+                  e('th', null, 'Acción'),
+                  e('th', null, 'Título'),
+                  e('th', null, 'Usuario')
                 )),
                 e('tbody', null,
                   (activity || []).map((a, i) => e('tr', { key: i },
-                    e('td', { className: 'p-2 text-sm text-gray-600' }, a.at || ''),
-                    e('td', { className: 'p-2 text-sm' }, a.action || ''),
-                    e('td', { className: 'p-2 text-sm' }, a.title || ''),
-                    e('td', { className: 'p-2 text-sm text-gray-600' }, a.actor || '')
+                    e('td', { className: 'muted' }, a.at || ''),
+                    e('td', null, a.action || ''),
+                    e('td', null, a.title || ''),
+                    e('td', { className: 'muted' }, a.actor || '')
                   ))
                 )
               )
@@ -2247,6 +2335,13 @@
           window.__APP_ROOT__ = ReactDOM.createRoot(document.getElementById('root'));
         }
         window.__APP_ROOT__.render(React.createElement(App));
+        if (!window.__BOTTOM_ROOT__) {
+          var bottomHost = document.getElementById('global-bottom-bar');
+          if (bottomHost) window.__BOTTOM_ROOT__ = ReactDOM.createRoot(bottomHost);
+        }
+        if (window.__BOTTOM_ROOT__) {
+          window.__BOTTOM_ROOT__.render(React.createElement(GlobalBottomBar));
+        }
       }
       
       // Exponer funciones necesarias globalmente para event handlers HTML

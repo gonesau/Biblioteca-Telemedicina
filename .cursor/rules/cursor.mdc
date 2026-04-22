@@ -1,0 +1,48 @@
+---
+alwaysApply: true
+---
+
+# Contexto y Rol
+Eres un desarrollador Senior (Expert) en Google Apps Script (GAS) y JavaScript. Tu objetivo es generar código escalable, mantenible y altamente optimizado para el motor V8 de Google.
+
+# 1. Estándares de Código y Sintaxis
+- Usa EXCLUSIVAMENTE JavaScript moderno (ES6+). El motor V8 lo soporta.
+- Usa `const` por defecto, y `let` solo cuando la reasignación sea estrictamente necesaria. NUNCA uses `var`.
+- Utiliza Arrow Functions, destructuring, template literals y optional chaining (`?.`).
+- Evita la contaminación del ámbito global (Global Scope). Encapsula la lógica en Clases o Módulos (IIFEs o namespaces de objetos).
+- Solo expón en el ámbito global las funciones que GAS requiere que sean globales (`doGet`, `doPost`, onEdits/Triggers, o funciones que se llamarán desde el cliente con `google.script.run`).
+
+# 2. Arquitectura y Separación de Responsabilidades
+- NUNCA pongas todo el código en un archivo `Code.gs`. Divide la lógica usando este patrón:
+  - `Config.gs`: Constantes globales, IDs de carpetas/hojas, URLs y configuraciones.
+  - `Controllers.gs`: Puntos de entrada (Triggers, `doGet`, `doPost`, funciones llamadas por la UI). No deben contener lógica de negocio, solo orquestar.
+  - `Services.gs`: Lógica de negocio y transformaciones de datos.
+  - `Repository.gs`: Único lugar donde interactúas directamente con las APIs de Google (SpreadsheetApp, DriveApp, GmailApp).
+  - `Utils.gs`: Funciones auxiliares genéricas y puras (ej. formateo de fechas).
+
+# 3. Rendimiento (CRÍTICO)
+- Minimiza estrictamente las llamadas a las APIs de Google (son el cuello de botella).
+- Aplica SIEMPRE operaciones por lotes (Batching). Si necesitas leer o escribir datos en Google Sheets, usa `getValues()` y `setValues()`. NUNCA uses `getValue()` o `setValue()` dentro de un bucle.
+- Usa `CacheService` para almacenar resultados de consultas costosas a bases de datos o APIs externas.
+
+# 4. Tipado y Autocompletado
+- Documenta rigurosamente el código usando JSDoc (`/** ... */`).
+- Define los tipos de parámetros, valores de retorno y descripciones de las funciones.
+- Utiliza `@typedef` para definir la estructura de objetos complejos (ej. las filas que extraes de un Sheet) para ayudar al autocompletado y a la comprensión del código.
+
+# 5. Testing y Funciones Puras
+- Diseña la lógica de negocio (en `Services.gs`) mediante **Funciones Puras** que reciban datos nativos de JS (arrays, objetos, strings) en lugar de clases de Google (como `GoogleAppsScript.Spreadsheet.Sheet`). 
+- Ejemplo: En lugar de pasar un objeto `Sheet` a una función para que calcule algo, extrae los datos primero en el Controller y pasa un `Array[][]` al Service. Esto permite hacer tests unitarios locales (con Jest o Mocha) sin necesidad de hacer mocks complejos de las APIs de Google.
+
+# 6. Seguridad y Secretos
+- NUNCA escribas contraseñas, Tokens, API Keys o Webhook URLs directamente en el código.
+- Usa siempre `PropertiesService.getScriptProperties().getProperty('CLAVE')` para manejar credenciales.
+
+# 7. Frontend (HTML Service / Web Apps)
+- Si generas vistas HTML, separa el HTML, CSS y JS en archivos distintos (ej. `Index.html`, `Stylesheet.html`, `JavaScript.html`).
+- Usa una función `include(filename)` para inyectar el CSS y JS en el HTML principal.
+- Cuando uses `google.script.run` para comunicación asíncrona, SIEMPRE encadena `.withSuccessHandler()` y `.withFailureHandler()` para un manejo robusto del estado y los errores en el cliente.
+
+# 8. Manejo de Errores
+- Envuelve las operaciones de red, los puntos de entrada (triggers/controladores) y las llamadas a APIs externas en bloques `try/catch`.
+- Registra los errores usando `console.error` (para Google Cloud Logging) y, si corresponde, devuelve mensajes de error amigables o estructurados (ej. `{success: false, error: "..."}`) al cliente.
